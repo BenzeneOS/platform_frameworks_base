@@ -986,6 +986,12 @@
     <!-- QuickSettings: Caffeine indicator for infinite mode [CHAR LIMIT=5] -->
     <string name="quick_settings_caffeine_infinite_indicator" translatable="false">∞</string>
 
+    <!-- QuickSettings: Reading Mode [CHAR LIMIT=NONE] -->
+    <string name="quick_settings_reading_mode">Reading mode</string>
+    <!-- QuickSettings: Reading Mode accessibility strings [CHAR LIMIT=NONE] -->
+    <string name="accessibility_quick_settings_reading_mode_off">Reading mode off.</string>
+    <string name="accessibility_quick_settings_reading_mode_on">Reading mode on.</string>
+
     <!-- QuickSettings: Cellular detail panel title [CHAR LIMIT=NONE] -->
     <string name="quick_settings_cellular_detail_title">Mobile data</string>
     <!-- QuickSettings: Cellular detail panel, data usage title [CHAR LIMIT=NONE] -->
