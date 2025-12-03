@@ -106,6 +106,7 @@ public class Clock extends TextView implements
 
     private final int mAmPmStyle;
     private boolean mShowSeconds;
+    private boolean mForceShowSeconds;
     private Handler mSecondsHandler;
 
     /**
@@ -114,6 +115,13 @@ public class Clock extends TextView implements
     private int mNonAdaptedColor;
 
     private final BroadcastDispatcher mBroadcastDispatcher;
+
+    public void setForceShowSeconds(boolean forceShowSeconds) {
+        if (mForceShowSeconds != forceShowSeconds) {
+            mForceShowSeconds = forceShowSeconds;
+            updateShowSeconds();
+        }
+    }
 
     private final UserTracker.Callback mUserChangedCallback =
             new UserTracker.Callback() {
@@ -408,7 +416,7 @@ public class Clock extends TextView implements
     }
 
     private void updateShowSeconds() {
-        if (mShowSeconds) {
+        if (mShowSeconds || mForceShowSeconds) {
             // Wait until we have a display to start trying to show seconds.
             if (mSecondsHandler == null && getDisplay() != null) {
                 mSecondsHandler = new Handler();
@@ -447,7 +455,7 @@ public class Clock extends TextView implements
         final char MAGIC1 = '\uEF00';
         final char MAGIC2 = '\uEF01';
 
-        final String formatSkeleton = mShowSeconds
+        final String formatSkeleton = (mShowSeconds || mForceShowSeconds)
                 ? is24 ? "Hms" : "hms"
                 : is24 ? "Hm" : "hm";
         String format = mDateTimePatternGenerator.getBestPattern(formatSkeleton);
