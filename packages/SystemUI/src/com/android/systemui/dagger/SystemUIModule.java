@@ -32,6 +32,7 @@ import com.android.keyguard.dagger.KeyguardBouncerComponent;
 import com.android.systemui.BootCompleteCache;
 import com.android.systemui.BootCompleteCacheImpl;
 import com.android.systemui.CameraProtectionModule;
+import com.android.systemui.qs.tiles.CaffeineTileModule;
 import com.android.systemui.CoreStartable;
 import com.android.systemui.KairosCoreStartableModule;
 import com.android.systemui.SystemUISecondaryUserService;
@@ -222,6 +223,7 @@ import javax.inject.Named;
         BouncerInteractorModule.class,
         BouncerRepositoryModule.class,
         BouncerViewModule.class,
+        CaffeineTileModule.class,
         CameraProtectionModule.class,
         ClipboardOverlayModule.class,
         ClockRegistryModule.class,
