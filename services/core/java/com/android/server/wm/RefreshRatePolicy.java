@@ -19,7 +19,10 @@ package com.android.server.wm;
 import static android.hardware.display.DisplayManager.SWITCHING_TYPE_NONE;
 import static android.hardware.display.DisplayManager.SWITCHING_TYPE_RENDER_FRAME_RATE_ONLY;
 
+import android.content.ContentResolver;
 import android.hardware.display.DisplayManager;
+import android.provider.Settings;
+import android.util.Log;
 import android.view.Display;
 import android.view.Display.Mode;
 import android.view.DisplayInfo;
@@ -240,6 +243,17 @@ class RefreshRatePolicy {
             return w.mFrameRateVote.reset();
         }
 
+        // Check if user has configured a specific refresh rate for this app first
+        // User settings should override app manifest values
+        final String packageName = w.getOwningPackage();
+        final int userId = android.os.UserHandle.getUserId(w.getOwningUid());
+        float userConfiguredRate = getUserConfiguredRefreshRate(packageName, userId);
+        if (userConfiguredRate > 0) {
+            return w.mFrameRateVote.update(userConfiguredRate,
+                    Surface.FRAME_RATE_COMPATIBILITY_EXACT,
+                    SurfaceControl.FRAME_RATE_SELECTION_STRATEGY_OVERRIDE_CHILDREN);
+        }
+
         // If the app set a preferredDisplayModeId, the preferred refresh rate is the refresh rate
         // of that mode id.
         if (refreshRateSwitchingType != SWITCHING_TYPE_RENDER_FRAME_RATE_ONLY) {
@@ -264,7 +278,6 @@ class RefreshRatePolicy {
         // If the app didn't set a preferred mode id or refresh rate, but it is part of the deny
         // list, we return the low refresh rate as the preferred one.
         if (refreshRateSwitchingType != SWITCHING_TYPE_RENDER_FRAME_RATE_ONLY) {
-            final String packageName = w.getOwningPackage();
             if (mHighRefreshRateDenylist.isDenylisted(packageName)) {
                 return w.mFrameRateVote.update(mLowRefreshRateMode.getRefreshRate(),
                         Surface.FRAME_RATE_COMPATIBILITY_EXACT,
@@ -305,17 +318,83 @@ class RefreshRatePolicy {
             return 0;
         }
 
+        final String packageName = w.getOwningPackage();
+        final int userId = android.os.UserHandle.getUserId(w.getOwningUid());
+
+        // Check user-configured refresh rate first - user settings override everything
+        float userConfiguredRate = getUserConfiguredRefreshRate(packageName, userId);
+        if (userConfiguredRate > 0) {
+            return userConfiguredRate;
+        }
+
         if (w.mAttrs.preferredMaxDisplayRefreshRate > 0) {
             return w.mAttrs.preferredMaxDisplayRefreshRate;
         }
 
-        final String packageName = w.getOwningPackage();
         // If app is using Camera, force it to default (lower) refresh rate.
         RefreshRateRange range = mNonHighRefreshRatePackages.get(packageName);
         if (range != null) {
             return range.max;
         }
 
+        return 0;
+    }
+
+    /**
+     * Get the default refresh rate that would be used for a package without user override.
+     * This checks denylists to determine what the system would use.
+     * @param packageName The package name
+     * @return default refresh rate in Hz
+     * @hide
+     */
+    public float getDefaultRefreshRateForPackage(String packageName) {
+        if (packageName == null) {
+            return mMaxSupportedRefreshRate;
+        }
+
+        // Check if denylisted
+        if (mHighRefreshRateDenylist.isDenylisted(packageName)) {
+            return mLowRefreshRateMode != null ? mLowRefreshRateMode.getRefreshRate() : 60.0f;
+        }
+
+        return mMaxSupportedRefreshRate;
+    }
+
+    /**
+     * Get user-configured refresh rate for a specific app.
+     * @param packageName The package name of the app
+     * @param userId The user ID the app is running under
+     * @return refresh rate if configured, 0 if not set (use default)
+     */
+    private float getUserConfiguredRefreshRate(String packageName, int userId) {
+        if (packageName == null) {
+            return 0;
+        }
+
+        ContentResolver resolver = mWmService.mContext.getContentResolver();
+        // For user 0 (main user), use base key. For other users, use per-user key
+        String settingKey = (userId == 0) ? "app_specific_refresh_rates"
+                : "app_specific_refresh_rates_" + userId;
+        String allSettings = Settings.System.getString(resolver, settingKey);
+
+        if (allSettings == null || allSettings.isEmpty()) {
+            return 0;
+        }
+
+        String[] entries = allSettings.split(";");
+        for (String entry : entries) {
+            String[] parts = entry.split(":");
+            if (parts.length == 2 && parts[0].equals(packageName)) {
+                try {
+                    float rate = Float.parseFloat(parts[1]);
+                    Log.d("RefreshRatePolicy", "User configured refresh rate for " + packageName + ": " + rate + " Hz");
+                    return rate;
+                } catch (NumberFormatException e) {
+                    Log.e("RefreshRatePolicy", "Invalid refresh rate for " + packageName, e);
+                    return 0;
+                }
+            }
+        }
         return 0;
     }
 }
