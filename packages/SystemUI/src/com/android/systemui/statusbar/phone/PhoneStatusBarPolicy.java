@@ -36,6 +36,7 @@ import android.os.Looper;
 import android.os.RemoteException;
 import android.os.UserManager;
 import android.provider.Settings.Global;
+
 import android.service.notification.ZenModeConfig;
 import android.telecom.TelecomManager;
 import android.text.format.DateFormat;
@@ -75,9 +76,12 @@ import com.android.systemui.statusbar.policy.UserInfoController;
 import com.android.systemui.statusbar.policy.ZenModeController;
 import com.android.systemui.statusbar.policy.domain.interactor.ZenModeInteractor;
 import com.android.systemui.statusbar.policy.domain.model.ZenModeInfo;
+import com.android.systemui.tuner.TunerService;
 import com.android.systemui.util.RingerModeTracker;
 import com.android.systemui.util.kotlin.JavaAdapter;
 import com.android.systemui.util.time.DateFormatUtil;
+
+import app.benzeneos.providers.BenzeneSettings;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -100,11 +104,15 @@ public class PhoneStatusBarPolicy
                 KeyguardStateController.Callback,
                 PrivacyItemController.Callback,
                 LocationController.LocationChangeCallback,
-                ScreenRecordUxController.StateChangeCallback {
+                ScreenRecordUxController.StateChangeCallback,
+                TunerService.Tunable {
     private static final String TAG = "PhoneStatusBarPolicy";
     private static final boolean DEBUG = Log.isLoggable(TAG, Log.DEBUG);
 
     static final int LOCATION_STATUS_ICON_ID = PrivacyType.TYPE_LOCATION.getIconId();
+
+    private static final String NETWORK_TRAFFIC_ENABLED =
+            "benzene:" + BenzeneSettings.System.NETWORK_TRAFFIC_ENABLED;
 
     private final String mSlotHotspot;
     private final String mSlotBluetooth;
@@ -123,6 +131,10 @@ public class PhoneStatusBarPolicy
     private final String mSlotSensorsOff;
     private final String mSlotScreenRecord;
     private final String mSlotConnectedDisplay;
+    private final String mSlotNetworkTraffic;
+    private final Context mContext;
+    private final TunerService mTunerService;
+    private boolean mShowNetworkTraffic;
     private final int mDisplayId;
     private final SharedPreferences mSharedPreferences;
     private final DateFormatUtil mDateFormatUtil;
@@ -155,7 +167,6 @@ public class PhoneStatusBarPolicy
     private final RingerModeTracker mRingerModeTracker;
     private final PrivacyLogger mPrivacyLogger;
     private final ZenModeInteractor mZenModeInteractor;
-
     private boolean mZenVisible;
     private boolean mVibrateVisible;
     private boolean mMuteVisible;
@@ -167,7 +178,8 @@ public class PhoneStatusBarPolicy
     private AlarmManager.AlarmClockInfo mNextAlarm;
 
     @Inject
-    public PhoneStatusBarPolicy(StatusBarIconController iconController,
+    public PhoneStatusBarPolicy(Context context,
+            StatusBarIconController iconController,
             CommandQueue commandQueue, BroadcastDispatcher broadcastDispatcher,
             @Main Executor mainExecutor, @UiBackground Executor uiBgExecutor, @Main Looper looper,
             @Main Resources resources,
@@ -188,8 +200,11 @@ public class PhoneStatusBarPolicy
             PrivacyLogger privacyLogger,
             ConnectedDisplayInteractor connectedDisplayInteractor,
             ZenModeInteractor zenModeInteractor,
-            JavaAdapter javaAdapter
+            JavaAdapter javaAdapter,
+            TunerService tunerService
     ) {
+        mContext = context;
+        mTunerService = tunerService;
         mIconController = iconController;
         mCommandQueue = commandQueue;
         mConnectedDisplayInteractor = connectedDisplayInteractor;
@@ -240,6 +255,8 @@ public class PhoneStatusBarPolicy
         mSlotSensorsOff = resources.getString(com.android.internal.R.string.status_bar_sensors_off);
         mSlotScreenRecord = resources.getString(
                 com.android.internal.R.string.status_bar_screen_record);
+        mSlotNetworkTraffic = resources.getString(
+                com.android.internal.R.string.status_bar_network_traffic);
 
         mDisplayId = displayId;
         mSharedPreferences = sharedPreferences;
@@ -340,6 +357,9 @@ public class PhoneStatusBarPolicy
         mIconController.setIcon(mSlotScreenRecord, R.drawable.stat_sys_screen_record, null);
         mIconController.setIconVisibility(mSlotScreenRecord, false);
 
+        // network traffic - register tunable (TunerService will call onTuningChanged)
+        mTunerService.addTunable(this, NETWORK_TRAFFIC_ENABLED);
+
         mRotationLockController.addCallback(this);
         mBluetooth.addCallback(this);
         mProvisionedController.addCallback(this);
@@ -366,6 +386,27 @@ public class PhoneStatusBarPolicy
         return mDevicePolicyManager.getResources().getString(
                 STATUS_BAR_WORK_ICON_ACCESSIBILITY,
                 () -> mResources.getString(R.string.accessibility_managed_profile));
+    }
+
+    @Override
+    public void onTuningChanged(String key, String newValue) {
+        switch (key) {
+            case NETWORK_TRAFFIC_ENABLED:
+                mShowNetworkTraffic =
+                        TunerService.parseIntegerSwitch(newValue, false);
+                updateNetworkTraffic();
+                break;
+            default:
+                break;
+        }
+    }
+
+    private void updateNetworkTraffic() {
+        if (mShowNetworkTraffic) {
+            mIconController.setNetworkTraffic(mSlotNetworkTraffic);
+        } else {
+            mIconController.removeIcon(mSlotNetworkTraffic, 0);
+        }
     }
 
     private void onMainActiveModeChanged(@Nullable ZenModeInfo mainActiveMode) {

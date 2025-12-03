@@ -466,6 +466,7 @@ android_library {
     resource_dirs: [],
     static_libs: [
         "//frameworks/libs/systemui:compilelib",
+        "app.benzeneos.sdk.internal",
         "com.android.systemui.pods-aosp-handheld",
         "SystemUI-res",
         "WifiTrackerLib",
