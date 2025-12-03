@@ -34,6 +34,7 @@ import com.android.systemui.BootCompleteCacheImpl;
 import com.android.systemui.CameraProtectionModule;
 import com.android.systemui.qs.tiles.CaffeineTileModule;
 import com.android.systemui.qs.tiles.ReadingModeTileModule;
+import com.android.systemui.qs.tiles.UsbTetherTileModule;
 import com.android.systemui.CoreStartable;
 import com.android.systemui.KairosCoreStartableModule;
 import com.android.systemui.SystemUISecondaryUserService;
@@ -299,6 +300,7 @@ import javax.inject.Named;
         TopUiModule.class,
         TouchpadModule.class,
         TunerModule.class,
+        UsbTetherTileModule.class,
         UserDomainLayerModule.class,
         UserModule.class,
         UtilModule.class,
