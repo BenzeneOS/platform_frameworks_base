@@ -25,13 +25,20 @@ import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -60,6 +67,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.scale
@@ -365,6 +373,8 @@ fun BrightnessSliderContainer(
             initialValue = PolicyRestriction.NoRestriction
         )
     val overriddenByAppState by viewModel.brightnessOverriddenByWindow.collectAsStateWithLifecycle()
+    val isAutoBrightnessEnabled by viewModel.isAutomaticBrightnessEnabled.collectAsStateWithLifecycle()
+    val showAutoBrightnessButton by viewModel.showAutoBrightnessButton.collectAsStateWithLifecycle()
 
     DisposableEffect(Unit) { onDispose { viewModel.setIsDragging(false) } }
 
@@ -378,53 +388,205 @@ fun BrightnessSliderContainer(
             if (dragging) containerColors.mirrorColor else containerColors.idleColor
         )
 
-    Box(
+    Row(
         modifier =
             modifier
                 .padding(vertical = { SliderBackgroundFrameSize.height.roundToPx() })
                 .fillMaxWidth()
-                .sysuiResTag("brightness_slider")
+                .sysuiResTag("brightness_slider"),
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
     ) {
-        BrightnessSlider(
-            gammaValue = gamma,
-            valueRange = viewModel.minBrightness.value..viewModel.maxBrightness.value,
-            iconResProvider = BrightnessSliderViewModel::getIconForPercentage,
-            imageLoader = viewModel::loadImage,
-            restriction = restriction,
-            onRestrictedClick = viewModel::showPolicyRestrictionDialog,
-            onDrag = {
-                viewModel.setIsDragging(true)
-                dragging = true
-                coroutineScope.launch { viewModel.onDrag(Drag.Dragging(GammaBrightness(it))) }
-            },
-            onStop = {
-                viewModel.setIsDragging(false)
-                dragging = false
-                coroutineScope.launch { viewModel.onDrag(Drag.Stopped(GammaBrightness(it))) }
-            },
-            modifier =
-                Modifier.borderOnFocus(
-                        color = MaterialTheme.colorScheme.secondary,
-                        cornerSize = CornerSize(SliderTrackRoundedCorner),
+        Box(modifier = Modifier.weight(1f)) {
+            BrightnessSlider(
+                gammaValue = gamma,
+                valueRange = viewModel.minBrightness.value..viewModel.maxBrightness.value,
+                iconResProvider = BrightnessSliderViewModel::getIconForPercentage,
+                imageLoader = viewModel::loadImage,
+                restriction = restriction,
+                onRestrictedClick = viewModel::showPolicyRestrictionDialog,
+                onDrag = {
+                    viewModel.setIsDragging(true)
+                    dragging = true
+                    coroutineScope.launch { viewModel.onDrag(Drag.Dragging(GammaBrightness(it))) }
+                },
+                onStop = {
+                    viewModel.setIsDragging(false)
+                    dragging = false
+                    coroutineScope.launch { viewModel.onDrag(Drag.Stopped(GammaBrightness(it))) }
+                },
+                modifier =
+                    Modifier.borderOnFocus(
+                            color = MaterialTheme.colorScheme.secondary,
+                            cornerSize = CornerSize(SliderTrackRoundedCorner),
+                        )
+                        .then(if (viewModel.showMirror) Modifier.drawInOverlay() else Modifier)
+                        .sliderBackground(containerColor)
+                        .fillMaxWidth()
+                        .pointerInteropFilter {
+                            if (
+                                it.actionMasked == MotionEvent.ACTION_UP ||
+                                    it.actionMasked == MotionEvent.ACTION_CANCEL
+                            ) {
+                                viewModel.emitBrightnessTouchForFalsing()
+                            }
+                            false
+                        },
+                hapticsViewModelFactory = viewModel.hapticsViewModelFactory,
+                overriddenByAppState = overriddenByAppState,
+                showToast = {
+                    viewModel.showToast(context, R.string.quick_settings_brightness_unable_adjust_msg)
+                },
+            )
+        }
+
+        // Auto brightness toggle button - only show if auto brightness is available on the device
+        // and the user hasn't disabled it in settings
+        if (showAutoBrightnessButton && viewModel.isAutomaticBrightnessAvailable) {
+            Spacer(modifier = Modifier.width(8.dp))
+            AutoBrightnessButton(
+                isEnabled = isAutoBrightnessEnabled,
+                onClick = { viewModel.toggleAutomaticBrightness() },
+                onLongClick = { viewModel.openStatusBarSettings() },
+                contentDescription = stringResource(R.string.accessibility_quick_settings_auto_brightness)
+            )
+        }
+    }
+}
+
+/**
+ * Auto brightness toggle button with sun icon containing "A" (auto) or "M" (manual)
+ * Styled to match the brightness slider colors
+ * Long press opens display settings
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun AutoBrightnessButton(
+    isEnabled: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    contentDescription: String,
+    modifier: Modifier = Modifier
+) {
+    // Match the slider's active track color when enabled, QS tile inactive color when disabled
+    val inactiveBackgroundColor = LocalAndroidColorScheme.current.surfaceEffect1
+    val buttonBackgroundColor by animateColorAsState(
+        if (isEnabled) MaterialTheme.colorScheme.primary
+        else inactiveBackgroundColor,
+        label = "buttonBackground"
+    )
+    val iconColor by animateColorAsState(
+        if (isEnabled) MaterialTheme.colorScheme.onPrimary
+        else MaterialTheme.colorScheme.onSurfaceVariant,
+        label = "iconColor"
+    )
+
+    Box(
+        modifier = modifier
+            .size(40.dp)
+            .drawWithCache {
+                val cornerRadius = CornerRadius(12.dp.toPx())
+                onDrawBehind {
+                    drawRoundRect(
+                        color = buttonBackgroundColor,
+                        cornerRadius = cornerRadius
                     )
-                    .then(if (viewModel.showMirror) Modifier.drawInOverlay() else Modifier)
-                    .sliderBackground(containerColor)
-                    .fillMaxWidth()
-                    .pointerInteropFilter {
-                        if (
-                            it.actionMasked == MotionEvent.ACTION_UP ||
-                                it.actionMasked == MotionEvent.ACTION_CANCEL
-                        ) {
-                            viewModel.emitBrightnessTouchForFalsing()
-                        }
-                        false
-                    },
-            hapticsViewModelFactory = viewModel.hapticsViewModelFactory,
-            overriddenByAppState = overriddenByAppState,
-            showToast = {
-                viewModel.showToast(context, R.string.quick_settings_brightness_unable_adjust_msg)
-            },
-        )
+                }
+            }
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
+            )
+            .semantics { text = AnnotatedString(contentDescription) },
+        contentAlignment = androidx.compose.ui.Alignment.Center
+    ) {
+        androidx.compose.foundation.Canvas(modifier = Modifier.size(24.dp)) {
+            // Scale factor to convert from 24dp viewport to actual size
+            val scale = size.width / 24f
+
+            // Sun outline path (matching crdroid's style - squared sun shape)
+            // Outer sun with inner cutout creates the outline effect
+            val sunPath = Path().apply {
+                // Outer boundary
+                moveTo(20f * scale, 8.69f * scale)
+                lineTo(20f * scale, 4f * scale)
+                lineTo(15.31f * scale, 4f * scale)
+                lineTo(12f * scale, 0.69f * scale)
+                lineTo(8.69f * scale, 4f * scale)
+                lineTo(4f * scale, 4f * scale)
+                lineTo(4f * scale, 8.69f * scale)
+                lineTo(0.69f * scale, 12f * scale)
+                lineTo(4f * scale, 15.31f * scale)
+                lineTo(4f * scale, 20f * scale)
+                lineTo(8.69f * scale, 20f * scale)
+                lineTo(12f * scale, 23.31f * scale)
+                lineTo(15.31f * scale, 20f * scale)
+                lineTo(20f * scale, 20f * scale)
+                lineTo(20f * scale, 15.31f * scale)
+                lineTo(23.31f * scale, 12f * scale)
+                close()
+
+                // Inner cutout (creates the outline)
+                moveTo(18f * scale, 14.48f * scale)
+                lineTo(18f * scale, 18f * scale)
+                lineTo(14.48f * scale, 18f * scale)
+                lineTo(12f * scale, 20.48f * scale)
+                lineTo(9.52f * scale, 18f * scale)
+                lineTo(6f * scale, 18f * scale)
+                lineTo(6f * scale, 14.48f * scale)
+                lineTo(3.52f * scale, 12f * scale)
+                lineTo(6f * scale, 9.52f * scale)
+                lineTo(6f * scale, 6f * scale)
+                lineTo(9.52f * scale, 6f * scale)
+                lineTo(12f * scale, 3.52f * scale)
+                lineTo(14.48f * scale, 6f * scale)
+                lineTo(18f * scale, 6f * scale)
+                lineTo(18f * scale, 9.52f * scale)
+                lineTo(20.48f * scale, 12f * scale)
+                close()
+            }
+            drawPath(sunPath, color = iconColor)
+
+            // Letter inside - filled style matching crdroid
+            val letterPath = if (isEnabled) {
+                // Letter "A" - filled triangular shape with hole
+                Path().apply {
+                    // Outer A shape
+                    moveTo(11f * scale, 7f * scale)
+                    lineTo(7.8f * scale, 16f * scale)
+                    lineTo(9.7f * scale, 16f * scale)
+                    lineTo(10.4f * scale, 14f * scale)
+                    lineTo(13.6f * scale, 14f * scale)
+                    lineTo(14.3f * scale, 16f * scale)
+                    lineTo(16.2f * scale, 16f * scale)
+                    lineTo(13f * scale, 7f * scale)
+                    close()
+
+                    // Inner triangle hole
+                    moveTo(12f * scale, 9f * scale)
+                    lineTo(13.15f * scale, 12.65f * scale)
+                    lineTo(10.85f * scale, 12.65f * scale)
+                    close()
+                }
+            } else {
+                // Letter "M" - filled
+                Path().apply {
+                    moveTo(7.93f * scale, 7f * scale)
+                    lineTo(7.93f * scale, 16f * scale)
+                    lineTo(9.68f * scale, 16f * scale)
+                    lineTo(9.68f * scale, 10.5f * scale)
+                    lineTo(12f * scale, 14f * scale)
+                    lineTo(14.32f * scale, 10.5f * scale)
+                    lineTo(14.32f * scale, 16f * scale)
+                    lineTo(16.07f * scale, 16f * scale)
+                    lineTo(16.07f * scale, 7f * scale)
+                    lineTo(14f * scale, 7f * scale)
+                    lineTo(12f * scale, 10.5f * scale)
+                    lineTo(10f * scale, 7f * scale)
+                    close()
+                }
+            }
+            drawPath(letterPath, color = iconColor)
+        }
     }
 }
 
