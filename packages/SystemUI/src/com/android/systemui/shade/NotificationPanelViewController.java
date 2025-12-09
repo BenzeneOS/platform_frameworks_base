@@ -62,11 +62,13 @@ import android.graphics.RenderEffect;
 import android.graphics.Shader;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.PowerManager;
 import android.os.Trace;
 import android.util.IndentingPrintWriter;
 import android.util.Log;
 import android.util.MathUtils;
 import android.view.Display;
+import android.view.GestureDetector;
 import android.view.HapticFeedbackConstants;
 import android.view.InputDevice;
 import android.view.MotionEvent;
@@ -93,6 +95,7 @@ import com.android.keyguard.KeyguardUnfoldTransition;
 import com.android.keyguard.KeyguardUpdateMonitor;
 import com.android.keyguard.dagger.KeyguardStatusBarViewComponent;
 import com.android.systemui.DejankUtils;
+import com.android.systemui.Dependency;
 import com.android.systemui.Dumpable;
 import com.android.systemui.Flags;
 import com.android.systemui.Gefingerpoken;
@@ -202,6 +205,10 @@ import com.android.systemui.wallpapers.ui.viewmodel.WallpaperFocalAreaViewModel;
 import com.android.systemui.window.domain.interactor.WindowRootViewBlurInteractor;
 import com.android.wm.shell.animation.FlingAnimationUtils;
 
+import app.benzeneos.providers.BenzeneSettings;
+
+import com.android.systemui.tuner.TunerService;
+
 import dalvik.annotation.optimization.NeverCompile;
 
 import com.google.android.msdl.data.model.MSDLToken;
@@ -227,7 +234,7 @@ import javax.inject.Provider;
 
 @SysUISingleton
 public final class NotificationPanelViewController implements
-        ShadeSurface, Dumpable, BrightnessMirrorShowingInteractor {
+        ShadeSurface, Dumpable, BrightnessMirrorShowingInteractor, TunerService.Tunable {
 
     public static final String TAG = NotificationPanelView.class.getSimpleName();
     private static final boolean DEBUG_LOGCAT = Log.isLoggable(TAG, Log.DEBUG);
@@ -256,6 +263,13 @@ public final class NotificationPanelViewController implements
     private static final String COUNTER_PANEL_OPEN = "panel_open";
     public static final String COUNTER_PANEL_OPEN_QS = "panel_open_qs";
     private static final String COUNTER_PANEL_OPEN_PEEK = "panel_open_peek";
+
+    // Double tap to sleep settings keys
+    private static final String DOUBLE_TAP_SLEEP_STATUS_BAR =
+            "benzene:" + BenzeneSettings.System.DOUBLE_TAP_SLEEP_STATUS_BAR;
+    private static final String DOUBLE_TAP_SLEEP_LOCKSCREEN =
+            "benzene:" + BenzeneSettings.System.DOUBLE_TAP_SLEEP_LOCKSCREEN;
+
     private static final Rect M_DUMMY_DIRTY_RECT = new Rect(0, 0, 1, 1);
     private static final Rect EMPTY_RECT = new Rect();
     //TODO(b/394977231) delete this temporary workaround used only by tests
@@ -273,6 +287,14 @@ public final class NotificationPanelViewController implements
      * The minimum scale to "squish" the Shade and associated elements down to, for Back gesture
      */
     public static final float SHADE_BACK_ANIM_MIN_SCALE = 0.9f;
+
+    // Double tap to sleep
+    private boolean mDoubleTapStatusBarEnabled;
+    private boolean mDoubleTapLockscreenEnabled;
+    private GestureDetector mDoubleTapGesture;
+    private PowerManager mPowerManager;
+    private TunerService mTunerService;
+
     private final ShadeTouchableRegionManager mShadeTouchableRegionManager;
     private final Resources mResources;
     private final KeyguardStateController mKeyguardStateController;
@@ -776,6 +798,20 @@ public final class NotificationPanelViewController implements
         mUnlockedScreenOffAnimationController = unlockedScreenOffAnimationController;
         mLastDownEvents = new NPVCDownEventState.Buffer(MAX_DOWN_EVENT_BUFFER_SIZE);
         mDeviceEntryFaceAuthInteractor = deviceEntryFaceAuthInteractor;
+
+        // Initialize double tap to sleep
+        mPowerManager = mView.getContext().getSystemService(PowerManager.class);
+        mTunerService = Dependency.get(TunerService.class);
+        mDoubleTapGesture = new GestureDetector(mView.getContext(),
+                new GestureDetector.SimpleOnGestureListener() {
+                    @Override
+                    public boolean onDoubleTap(MotionEvent e) {
+                        if (mPowerManager != null) {
+                            mPowerManager.goToSleep(e.getEventTime());
+                        }
+                        return true;
+                    }
+                });
 
         int currentMode = navigationModeController.addListener(
                 mode -> mIsGestureNavigation = QuickStepContract.isGesturalMode(mode));
@@ -3664,6 +3700,20 @@ public final class NotificationPanelViewController implements
         positionClockAndNotifications(true /* forceUpdate */);
     }
 
+    @Override
+    public void onTuningChanged(String key, String newValue) {
+        switch (key) {
+            case DOUBLE_TAP_SLEEP_STATUS_BAR:
+                mDoubleTapStatusBarEnabled =
+                        TunerService.parseIntegerSwitch(newValue, false);
+                break;
+            case DOUBLE_TAP_SLEEP_LOCKSCREEN:
+                mDoubleTapLockscreenEnabled =
+                        TunerService.parseIntegerSwitch(newValue, false);
+                break;
+        }
+    }
+
     private final class ShadeAttachStateChangeListener implements View.OnAttachStateChangeListener {
         @Override
         public void onViewAttachedToWindow(View v) {
@@ -3681,6 +3731,12 @@ public final class NotificationPanelViewController implements
             mConfigurationListener.onThemeChanged();
             mFalsingManager.addTapListener(mFalsingTapListener);
             mKeyguardIndicationController.init();
+
+            // Register double tap to sleep settings
+            mTunerService.addTunable(NotificationPanelViewController.this,
+                    DOUBLE_TAP_SLEEP_STATUS_BAR);
+            mTunerService.addTunable(NotificationPanelViewController.this,
+                    DOUBLE_TAP_SLEEP_LOCKSCREEN);
         }
 
         @Override
@@ -3690,6 +3746,7 @@ public final class NotificationPanelViewController implements
             mStatusBarStateController.removeCallback(mStatusBarStateListener);
             mConfigurationController.removeCallback(mConfigurationListener);
             mFalsingManager.removeTapListener(mFalsingTapListener);
+            mTunerService.removeTunable(NotificationPanelViewController.this);
         }
     }
 
@@ -4023,6 +4080,14 @@ public final class NotificationPanelViewController implements
                 expand(true /* animate */);
             }
             initDownStates(event);
+
+            // Handle double tap to sleep gesture
+            boolean isStatusBarArea = event.getY() < mStatusBarHeaderHeightKeyguard;
+            boolean isOnLockscreen = mBarState == StatusBarState.KEYGUARD && !mPulsing && !mDozing;
+            if ((mDoubleTapLockscreenEnabled && isOnLockscreen) ||
+                    (mDoubleTapStatusBarEnabled && !mQsController.getExpanded() && isStatusBarArea)) {
+                mDoubleTapGesture.onTouchEvent(event);
+            }
 
             // If pulse is expanding already, let's give it the touch. There are situations
             // where the panel starts expanding even though we're also pulsing
