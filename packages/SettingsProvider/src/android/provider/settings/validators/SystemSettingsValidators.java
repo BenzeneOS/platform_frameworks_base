@@ -304,5 +304,6 @@ public class SystemSettingsValidators {
         VALIDATORS.put(System.VOLBTN_MUSIC_CONTROLS, BOOLEAN_VALIDATOR);
         VALIDATORS.put(System.EDGE_LONG_SWIPE_ACTION, new InclusiveIntegerRangeValidator(0, 12));
         VALIDATORS.put(System.THREE_FINGER_SCREENSHOT, BOOLEAN_VALIDATOR);
+        VALIDATORS.put(System.WIFI_STANDARD_ICON, BOOLEAN_VALIDATOR);
     }
 }
