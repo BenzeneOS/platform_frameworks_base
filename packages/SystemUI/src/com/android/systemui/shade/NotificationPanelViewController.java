@@ -62,11 +62,14 @@ import android.graphics.RenderEffect;
 import android.graphics.Shader;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.PowerManager;
 import android.os.Trace;
+import android.provider.Settings;
 import android.util.IndentingPrintWriter;
 import android.util.Log;
 import android.util.MathUtils;
 import android.view.Display;
+import android.view.GestureDetector;
 import android.view.HapticFeedbackConstants;
 import android.view.InputDevice;
 import android.view.MotionEvent;
@@ -194,6 +197,7 @@ import com.android.systemui.statusbar.phone.UnlockedScreenOffAnimationController
 import com.android.systemui.statusbar.policy.ConfigurationController;
 import com.android.systemui.statusbar.policy.KeyguardStateController;
 import com.android.systemui.statusbar.policy.SplitShadeStateController;
+import com.android.systemui.tuner.TunerService;
 import com.android.systemui.unfold.SysUIUnfoldComponent;
 import com.android.systemui.util.Utils;
 import com.android.systemui.util.time.SystemClock;
@@ -226,9 +230,14 @@ import javax.inject.Provider;
 
 @SysUISingleton
 public final class NotificationPanelViewController implements
-        ShadeSurface, Dumpable, BrightnessMirrorShowingInteractor {
+        ShadeSurface, Dumpable, BrightnessMirrorShowingInteractor, TunerService.Tunable {
 
     public static final String TAG = NotificationPanelView.class.getSimpleName();
+
+    private static final String DOUBLE_TAP_SLEEP_STATUS_BAR =
+            "system:" + Settings.System.DOUBLE_TAP_SLEEP_STATUS_BAR;
+    private static final String DOUBLE_TAP_SLEEP_LOCKSCREEN =
+            "system:" + Settings.System.DOUBLE_TAP_SLEEP_LOCKSCREEN;
     private static final boolean DEBUG_LOGCAT = Log.isLoggable(TAG, Log.DEBUG);
     private static final boolean DEBUG_DRAWABLE = false;
     /** The parallax amount of the quick settings translation when dragging down the panel. */
@@ -310,6 +319,11 @@ public final class NotificationPanelViewController implements
     private final LockscreenShadeTransitionController mLockscreenShadeTransitionController;
     private final TapAgainViewController mTapAgainViewController;
     private final ShadeHeaderController mShadeHeaderController;
+    private final TunerService mTunerService;
+    private boolean mDoubleTapToSleepStatusBar;
+    private boolean mDoubleTapToSleepLockscreen;
+    private GestureDetector mDoubleTapGesture;
+    private PowerManager mPowerManager;
     private final boolean mVibrateOnOpening;
     private final VelocityTracker mVelocityTracker = VelocityTracker.obtain();
     private final FlingAnimationUtils mFlingAnimationUtilsClosing;
@@ -616,6 +630,7 @@ public final class NotificationPanelViewController implements
             FragmentService fragmentService,
             IStatusBarService statusBarService,
             ShadeHeaderController shadeHeaderController,
+            TunerService tunerService,
             ScreenOffAnimationController screenOffAnimationController,
             LockscreenGestureLogger lockscreenGestureLogger,
             ShadeExpansionStateManager shadeExpansionStateManager,
@@ -741,6 +756,10 @@ public final class NotificationPanelViewController implements
                 mSplitShadeStateController.shouldUseSplitNotificationShade(mResources);
         mView.setWillNotDraw(!DEBUG_DRAWABLE);
         mShadeHeaderController = shadeHeaderController;
+        mTunerService = tunerService;
+        mTunerService.addTunable(this,
+                DOUBLE_TAP_SLEEP_STATUS_BAR,
+                DOUBLE_TAP_SLEEP_LOCKSCREEN);
         mAnimateBack = predictiveBackAnimateShade();
         mFalsingCollector = falsingCollector;
         mWakeUpCoordinator = coordinator;
@@ -773,6 +792,19 @@ public final class NotificationPanelViewController implements
         mUnlockedScreenOffAnimationController = unlockedScreenOffAnimationController;
         mLastDownEvents = new NPVCDownEventState.Buffer(MAX_DOWN_EVENT_BUFFER_SIZE);
         mDeviceEntryFaceAuthInteractor = deviceEntryFaceAuthInteractor;
+
+        // Initialize double tap to sleep
+        mPowerManager = mView.getContext().getSystemService(PowerManager.class);
+        mDoubleTapGesture = new GestureDetector(mView.getContext(),
+                new GestureDetector.SimpleOnGestureListener() {
+                    @Override
+                    public boolean onDoubleTap(MotionEvent e) {
+                        if (mPowerManager != null) {
+                            mPowerManager.goToSleep(e.getEventTime());
+                        }
+                        return true;
+                    }
+                });
 
         int currentMode = navigationModeController.addListener(
                 mode -> mIsGestureNavigation = QuickStepContract.isGesturalMode(mode));
@@ -2574,6 +2606,20 @@ public final class NotificationPanelViewController implements
         mBlockingExpansionForCurrentTouch = isTracking();
     }
 
+    @Override
+    public void onTuningChanged(String key, String newValue) {
+        switch (key) {
+            case DOUBLE_TAP_SLEEP_STATUS_BAR:
+                mDoubleTapToSleepStatusBar = TunerService.parseIntegerSwitch(newValue, false);
+                break;
+            case DOUBLE_TAP_SLEEP_LOCKSCREEN:
+                mDoubleTapToSleepLockscreen = TunerService.parseIntegerSwitch(newValue, false);
+                break;
+            default:
+                break;
+        }
+    }
+
     @NeverCompile
     @Override
     public void dump(PrintWriter pw, String[] args) {
@@ -3999,6 +4045,14 @@ public final class NotificationPanelViewController implements
                 expand(true /* animate */);
             }
             initDownStates(event);
+
+            // Handle double tap to sleep gesture
+            if ((mDoubleTapToSleepLockscreen && !mPulsing && !mDozing
+                    && mBarState == StatusBarState.KEYGUARD)
+                    || (mDoubleTapToSleepStatusBar && !mQsController.getExpanded()
+                    && event.getY() < mStatusBarHeaderHeightKeyguard)) {
+                mDoubleTapGesture.onTouchEvent(event);
+            }
 
             // If pulse is expanding already, let's give it the touch. There are situations
             // where the panel starts expanding even though we're also pulsing
