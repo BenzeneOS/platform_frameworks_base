@@ -5614,6 +5614,15 @@ public final class Settings {
         public static final String PEAK_REFRESH_RATE = "peak_refresh_rate";
 
         /**
+         * Per-app refresh rate overrides.
+         * Format: "package1:rate1;package2:rate2"
+         * Example: "com.android.chrome:60;com.google.android.youtube:90"
+         * @hide
+         */
+        @Readable
+        public static final String APP_SPECIFIC_REFRESH_RATES = "app_specific_refresh_rates";
+
+        /**
          * Control lock behavior on fold
          *
          * If this isn't set, the system falls back to a device specific default.
