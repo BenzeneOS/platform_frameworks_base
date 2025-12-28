@@ -89,6 +89,7 @@ private constructor(
 ) : ViewController<PhoneStatusBarView>(view) {
 
     private lateinit var clock: Clock
+    val clockController by lazy { ClockController(context, mView) }
     private lateinit var startSideContainer: View
     private lateinit var endSideContainer: View
 
@@ -181,6 +182,9 @@ private constructor(
     override fun onViewAttached() {
         clock = mView.requireViewById(R.id.clock)
 
+        // Initialize clockController to register tunable for clock position settings
+        clockController
+
         addDarkReceivers()
 
         if (mView.context.getDisplayId() != DEFAULT_DISPLAY) {
@@ -253,6 +257,7 @@ private constructor(
 
     @VisibleForTesting
     public override fun onViewDetached() {
+        clockController.removeTunable()
         removeDarkReceivers()
         startSideContainer.setOnHoverListener(null)
         endSideContainer.setOnHoverListener(null)
@@ -314,11 +319,11 @@ private constructor(
     }
 
     private fun addDarkReceivers() {
-        darkIconDispatcher.addDarkReceiver(clock)
+        // darkIconDispatcher.addDarkReceiver(clock) Note: Clock views register themselves for dark mode via mShowDark attribute
     }
 
     private fun removeDarkReceivers() {
-        darkIconDispatcher.removeDarkReceiver(clock)
+        // darkIconDispatcher.removeDarkReceiver(clock) Note: Clock views unregister themselves for dark mode via mShowDark attribute
     }
 
     @Deprecated(

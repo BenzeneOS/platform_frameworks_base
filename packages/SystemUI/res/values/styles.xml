@@ -23,6 +23,9 @@
         <item name="android:textColor">@color/status_bar_clock_color</item>
     </style>
 
+    <style name="TextAppearance.StatusBar.Default.Clock" parent="TextAppearance.StatusBar.Default">
+    </style>
+
     <style name="TextAppearance.StatusBar.UserChip" parent="@*android:style/TextAppearance.StatusBar.Icon">
         <item name="android:textSize">@dimen/status_bar_user_chip_text_size</item>
         <item name="android:fontFamily">@*android:string/config_headlineFontFamilyMedium</item>
