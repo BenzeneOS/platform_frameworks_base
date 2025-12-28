@@ -19,7 +19,16 @@ package com.android.server.wm;
 import static android.hardware.display.DisplayManager.SWITCHING_TYPE_NONE;
 import static android.hardware.display.DisplayManager.SWITCHING_TYPE_RENDER_FRAME_RATE_ONLY;
 
+import android.content.ContentResolver;
+import android.database.ContentObserver;
 import android.hardware.display.DisplayManager;
+import android.net.Uri;
+import android.os.Handler;
+import android.os.UserHandle;
+import android.provider.Settings;
+import android.util.ArrayMap;
+import android.util.Slog;
+import android.util.SparseArray;
 import android.view.Display;
 import android.view.Display.Mode;
 import android.view.DisplayInfo;
@@ -28,12 +37,19 @@ import android.view.SurfaceControl;
 import android.view.SurfaceControl.RefreshRateRange;
 
 import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 
 /**
  * Policy to select a lower refresh rate for the display if applicable.
  */
 class RefreshRatePolicy {
+    private static final String TAG = "RefreshRatePolicy";
+    private static final boolean DEBUG = false;
+
+    // Cache for user-configured per-app refresh rates, keyed by userId
+    private final SparseArray<Map<String, Float>> mPerUserRefreshRates = new SparseArray<>();
+    private final Object mCacheLock = new Object();
 
     class PackageRefreshRate {
         private final HashMap<String, RefreshRateRange> mPackages = new HashMap<>();
@@ -64,6 +80,7 @@ class RefreshRatePolicy {
     private final WindowManagerService mWmService;
     private float mMinSupportedRefreshRate;
     private float mMaxSupportedRefreshRate;
+    private ContentObserver mRefreshRateObserver;
 
     /**
      * The following constants represent priority of the window. SF uses this information when
@@ -92,6 +109,30 @@ class RefreshRatePolicy {
         mLowRefreshRateMode = findLowRefreshRateMode(displayInfo);
         mHighRefreshRateDenylist = denylist;
         mWmService = wmService;
+
+        // Register ContentObserver for per-app refresh rate settings
+        ContentResolver resolver = wmService.mContext.getContentResolver();
+        Uri settingUri = Settings.System.getUriFor(Settings.System.APP_SPECIFIC_REFRESH_RATES);
+        mRefreshRateObserver = new ContentObserver(new Handler(wmService.mH.getLooper())) {
+            @Override
+            public void onChange(boolean selfChange) {
+                invalidateUserRefreshRateCache();
+            }
+        };
+        resolver.registerContentObserver(settingUri, true, mRefreshRateObserver, UserHandle.USER_ALL);
+    }
+
+    /**
+     * Called when the display is removed to clean up resources.
+     */
+    void onDisplayRemoved() {
+        if (mRefreshRateObserver != null) {
+            mWmService.mContext.getContentResolver().unregisterContentObserver(mRefreshRateObserver);
+            mRefreshRateObserver = null;
+        }
+        synchronized (mCacheLock) {
+            mPerUserRefreshRates.clear();
+        }
     }
 
     /**
@@ -240,6 +281,17 @@ class RefreshRatePolicy {
             return w.mFrameRateVote.reset();
         }
 
+        // Check if user has configured a specific refresh rate for this app first
+        // User settings should override app manifest values
+        final String packageName = w.getOwningPackage();
+        final int userId = android.os.UserHandle.getUserId(w.getOwningUid());
+        float userConfiguredRate = getUserConfiguredRefreshRate(packageName, userId);
+        if (userConfiguredRate > 0) {
+            return w.mFrameRateVote.update(userConfiguredRate,
+                    Surface.FRAME_RATE_COMPATIBILITY_EXACT,
+                    SurfaceControl.FRAME_RATE_SELECTION_STRATEGY_OVERRIDE_CHILDREN);
+        }
+
         // If the app set a preferredDisplayModeId, the preferred refresh rate is the refresh rate
         // of that mode id.
         if (refreshRateSwitchingType != SWITCHING_TYPE_RENDER_FRAME_RATE_ONLY) {
@@ -264,7 +316,6 @@ class RefreshRatePolicy {
         // If the app didn't set a preferred mode id or refresh rate, but it is part of the deny
         // list, we return the low refresh rate as the preferred one.
         if (refreshRateSwitchingType != SWITCHING_TYPE_RENDER_FRAME_RATE_ONLY) {
-            final String packageName = w.getOwningPackage();
             if (mHighRefreshRateDenylist.isDenylisted(packageName)) {
                 return w.mFrameRateVote.update(mLowRefreshRateMode.getRefreshRate(),
                         Surface.FRAME_RATE_COMPATIBILITY_EXACT,
@@ -305,17 +356,128 @@ class RefreshRatePolicy {
             return 0;
         }
 
+        final String packageName = w.getOwningPackage();
+        final int userId = android.os.UserHandle.getUserId(w.getOwningUid());
+
+        // Check user-configured refresh rate first - user settings override everything
+        float userConfiguredRate = getUserConfiguredRefreshRate(packageName, userId);
+        if (userConfiguredRate > 0) {
+            return userConfiguredRate;
+        }
+
         if (w.mAttrs.preferredMaxDisplayRefreshRate > 0) {
             return w.mAttrs.preferredMaxDisplayRefreshRate;
         }
 
-        final String packageName = w.getOwningPackage();
         // If app is using Camera, force it to default (lower) refresh rate.
         RefreshRateRange range = mNonHighRefreshRatePackages.get(packageName);
         if (range != null) {
             return range.max;
         }
 
+        return 0;
+    }
+
+    /**
+     * Get the default refresh rate that would be used for a package without user override.
+     * This checks denylists to determine what the system would use.
+     * @param packageName The package name
+     * @return default refresh rate in Hz
+     * @hide
+     */
+    public float getDefaultRefreshRateForPackage(String packageName) {
+        if (packageName == null) {
+            return mMaxSupportedRefreshRate;
+        }
+
+        // Check if denylisted
+        if (mHighRefreshRateDenylist.isDenylisted(packageName)) {
+            return mLowRefreshRateMode != null ? mLowRefreshRateMode.getRefreshRate() : 60.0f;
+        }
+
+        return mMaxSupportedRefreshRate;
+    }
+
+    /**
+     * Invalidate the cached user refresh rate settings.
+     * Called when the setting changes.
+     */
+    private void invalidateUserRefreshRateCache() {
+        synchronized (mCacheLock) {
+            mPerUserRefreshRates.clear();
+        }
+        if (DEBUG) {
+            Slog.d(TAG, "User refresh rate cache invalidated");
+        }
+    }
+
+    /**
+     * Rebuild the cache for a specific user's refresh rate settings.
+     */
+    private void rebuildUserRefreshRateCache(int userId) {
+        ContentResolver resolver = mWmService.mContext.getContentResolver();
+        String allSettings = Settings.System.getStringForUser(resolver,
+                Settings.System.APP_SPECIFIC_REFRESH_RATES, userId);
+
+        Map<String, Float> rates = new ArrayMap<>();
+        if (allSettings != null && !allSettings.isEmpty()) {
+            String[] entries = allSettings.split(";");
+            for (String entry : entries) {
+                String[] parts = entry.split(":");
+                if (parts.length == 2) {
+                    try {
+                        rates.put(parts[0], Float.parseFloat(parts[1]));
+                    } catch (NumberFormatException e) {
+                        Slog.e(TAG, "Invalid refresh rate format for entry: " + entry, e);
+                    }
+                }
+            }
+        }
+
+        synchronized (mCacheLock) {
+            mPerUserRefreshRates.put(userId, rates);
+        }
+
+        if (DEBUG) {
+            Slog.d(TAG, "Rebuilt refresh rate cache for user " + userId + ": " + rates.size() + " entries");
+        }
+    }
+
+    /**
+     * Get user-configured refresh rate for a specific app.
+     * Uses cached values for performance.
+     * @param packageName The package name of the app
+     * @param userId The user ID the app is running under
+     * @return refresh rate if configured, 0 if not set (use default)
+     */
+    private float getUserConfiguredRefreshRate(String packageName, int userId) {
+        if (packageName == null) {
+            return 0;
+        }
+
+        Map<String, Float> rates;
+        synchronized (mCacheLock) {
+            rates = mPerUserRefreshRates.get(userId);
+        }
+
+        if (rates == null) {
+            rebuildUserRefreshRateCache(userId);
+            synchronized (mCacheLock) {
+                rates = mPerUserRefreshRates.get(userId);
+            }
+        }
+
+        if (rates == null) {
+            return 0;
+        }
+
+        Float rate = rates.get(packageName);
+        if (rate != null) {
+            if (DEBUG) {
+                Slog.d(TAG, "User configured refresh rate for " + packageName + ": " + rate + " Hz");
+            }
+            return rate;
+        }
         return 0;
     }
 }

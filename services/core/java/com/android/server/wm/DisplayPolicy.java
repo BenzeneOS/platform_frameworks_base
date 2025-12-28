@@ -3279,6 +3279,9 @@ public class DisplayPolicy {
         if (mService.mPointerLocationEnabled) {
             setPointerLocationEnabled(false);
         }
+        if (mRefreshRatePolicy != null) {
+            mRefreshRatePolicy.onDisplayRemoved();
+        }
     }
 
     @VisibleForTesting
