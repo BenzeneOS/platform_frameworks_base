@@ -4,4 +4,7 @@
     *;
 }
 
+# Keep Benzene Battery AIDL classes
+-keep class vendor.benzeneos.battery.** { *; }
+
 -keep,allowoptimization,allowaccessmodification class com.android.systemui.dagger.DaggerReferenceGlobalRootComponent** { !synthetic *; }

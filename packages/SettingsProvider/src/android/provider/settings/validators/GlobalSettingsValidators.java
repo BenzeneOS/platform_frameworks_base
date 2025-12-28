@@ -492,6 +492,12 @@ public class GlobalSettingsValidators {
         VALIDATORS.put(Global.CLIPBOARD_AUTO_CLEAR_ENABLED, BOOLEAN_VALIDATOR);
         VALIDATORS.put(Global.CLIPBOARD_AUTO_CLEAR_TIMEOUT, NON_NEGATIVE_INTEGER_VALIDATOR);
         VALIDATORS.put(Global.BATTERY_SPOOF_LEVEL, new InclusiveIntegerRangeValidator(-1, 100));
+
+        // Battery Charge Limit
+        VALIDATORS.put(Global.BATTERY_CHARGE_LIMIT, BOOLEAN_VALIDATOR);
+        VALIDATORS.put(Global.BATTERY_CHARGE_STOP_LEVEL, new InclusiveIntegerRangeValidator(50, 100));
+        VALIDATORS.put(Global.BATTERY_CHARGE_START_LEVEL, new InclusiveIntegerRangeValidator(45, 95));
+
         // ExtSettings END
     }
 }

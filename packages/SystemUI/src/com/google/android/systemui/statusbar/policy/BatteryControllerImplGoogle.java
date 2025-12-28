@@ -37,7 +37,9 @@ public class BatteryControllerImplGoogle extends BatteryControllerImpl {
 
         boolean isChargeLimitEnabled = BatteryChargeLimit.isChargeLimitEnabled(mContext);
         if (isChargeLimitEnabled) {
-            return mLevel >= BatteryChargeLimit.CHARGE_LEVEL;
+            // Use user's custom stop level, not hardcoded 80
+            int stopLevel = BatteryChargeLimit.getChargeStopLevel(mContext);
+            return mLevel >= stopLevel;
         }
         return false;
     }

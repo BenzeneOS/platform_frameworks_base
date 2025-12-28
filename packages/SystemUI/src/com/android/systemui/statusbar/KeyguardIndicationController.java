@@ -52,7 +52,6 @@ import static com.android.systemui.keyguard.ScreenLifecycle.SCREEN_ON;
 import static com.android.systemui.log.core.LogLevel.ERROR;
 import static com.android.systemui.plugins.FalsingManager.LOW_PENALTY;
 import static com.android.systemui.util.kotlin.JavaAdapterKt.collectFlow;
-import static android.ext.power.BatteryChargeLimit.CHARGE_LEVEL;
 
 import android.app.AlarmManager;
 import android.app.admin.DevicePolicyManager;
@@ -1183,8 +1182,9 @@ public class KeyguardIndicationController {
         Context context = mContext;
         if (BatteryChargeLimit.isChargeLimitEnabled(context)) {
             String percentage = NumberFormat.getPercentInstance().format(mBatteryLevel / 100f);
+            int chargeStopLevel = BatteryChargeLimit.getChargeStopLevel(context);
 
-            if (mChargingTimeRemaining > 0 && mBatteryLevel < CHARGE_LEVEL) {
+            if (mChargingTimeRemaining > 0 && mBatteryLevel < chargeStopLevel) {
                 if (isChargingStringV2Enabled()) {
                     String remainingTime = PowerUtil.getTargetTimeShortString(
                             context, mChargingTimeRemaining, System.currentTimeMillis());
@@ -1197,7 +1197,7 @@ public class KeyguardIndicationController {
                             remainingTime, percentage);
                 }
             }
-            if (mBatteryLevel >= CHARGE_LEVEL) {
+            if (mBatteryLevel >= chargeStopLevel) {
                 return context.getString(R.string.keyguard_indication_charging_time_reach_charge_limit,
                         percentage);
             }
@@ -1687,7 +1687,7 @@ public class KeyguardIndicationController {
         if (!status.isPluggedIn()) {
             return false;
         }
-        if (status.level >= BatteryChargeLimit.CHARGE_LEVEL && BatteryChargeLimit.isChargeLimitEnabled(mContext)) {
+        if (status.level >= BatteryChargeLimit.getChargeStopLevel(mContext) && BatteryChargeLimit.isChargeLimitEnabled(mContext)) {
             return true;
         }
         return isChargingOrFull;
