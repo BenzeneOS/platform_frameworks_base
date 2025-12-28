@@ -92,6 +92,25 @@ constructor(
 
     val brightnessOverriddenByWindow = screenBrightnessInteractor.brightnessOverriddenByWindow
 
+    /** Whether automatic brightness mode is enabled */
+    val isAutomaticBrightnessEnabled = screenBrightnessInteractor.isAutomaticBrightnessEnabled
+
+    /** Whether automatic brightness is available on this device */
+    val isAutomaticBrightnessAvailable = screenBrightnessInteractor.isAutomaticBrightnessAvailable
+
+    /** Whether the auto brightness button should be shown in QS */
+    val showAutoBrightnessButton = screenBrightnessInteractor.showAutoBrightnessButton
+
+    /** Toggles automatic brightness mode on/off */
+    fun toggleAutomaticBrightness() {
+        screenBrightnessInteractor.toggleAutomaticBrightness()
+    }
+
+    /** Opens status bar settings */
+    fun openStatusBarSettings() {
+        screenBrightnessInteractor.openStatusBarSettings()
+    }
+
     fun showToast(viewContext: Context, @StringRes resId: Int) {
         if (brightnessWarningToast.isToastActive()) {
             return

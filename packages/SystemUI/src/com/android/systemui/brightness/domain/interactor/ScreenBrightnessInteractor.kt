@@ -16,6 +16,9 @@
 
 package com.android.systemui.brightness.domain.interactor
 
+import android.content.Context
+import android.content.Intent
+import android.provider.Settings
 import com.android.settingslib.display.BrightnessUtils
 import com.android.systemui.brightness.data.repository.ScreenBrightnessRepository
 import com.android.systemui.brightness.shared.model.BrightnessLog
@@ -25,6 +28,7 @@ import com.android.systemui.brightness.shared.model.logDiffForTable
 import com.android.systemui.dagger.SysUISingleton
 import com.android.systemui.dagger.qualifiers.Application
 import com.android.systemui.log.table.TableLogBuffer
+import com.android.systemui.plugins.ActivityStarter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
@@ -44,6 +48,8 @@ constructor(
     private val screenBrightnessRepository: ScreenBrightnessRepository,
     @Application private val applicationScope: CoroutineScope,
     @BrightnessLog private val tableBuffer: TableLogBuffer,
+    private val activityStarter: ActivityStarter,
+    private val context: Context,
 ) {
     /** Maximum value in the Gamma space for brightness */
     val maxGammaBrightness = GammaBrightness(BrightnessUtils.GAMMA_SPACE_MAX)
@@ -69,6 +75,38 @@ constructor(
         }
 
     val brightnessOverriddenByWindow = screenBrightnessRepository.isBrightnessOverriddenByWindow
+
+    /** Whether automatic brightness mode is enabled */
+    val isAutomaticBrightnessEnabled = screenBrightnessRepository.isAutomaticBrightnessEnabled
+
+    /** Whether automatic brightness is available on this device */
+    val isAutomaticBrightnessAvailable = screenBrightnessRepository.isAutomaticBrightnessAvailable
+
+    /** Whether the auto brightness button should be shown in QS */
+    val showAutoBrightnessButton = screenBrightnessRepository.showAutoBrightnessButton
+
+    /** Toggles automatic brightness mode on/off */
+    fun toggleAutomaticBrightness() {
+        screenBrightnessRepository.toggleAutomaticBrightness()
+    }
+
+    /** Opens status bar settings and dismisses the shade */
+    fun openStatusBarSettings() {
+        val intent = Intent().apply {
+            setClassName("com.android.settings", "com.android.settings.Settings\$StatusBarSettingsActivity")
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        // Fallback to display settings if StatusBarSettingsActivity doesn't exist
+        val fallbackIntent = Intent(Settings.ACTION_DISPLAY_SETTINGS).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        val targetIntent = if (intent.resolveActivity(context.packageManager) != null) {
+            intent
+        } else {
+            fallbackIntent
+        }
+        activityStarter.postStartActivityDismissingKeyguard(targetIntent, 0)
+    }
 
     /** Sets the brightness temporarily, while the user is changing it. */
     suspend fun setTemporaryBrightness(gammaBrightness: GammaBrightness) {

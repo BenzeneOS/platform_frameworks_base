@@ -4605,6 +4605,9 @@
     <string name="quick_settings_usb_tether_label">USB tethering</string>
     <string name="quick_settings_usb_tether_no_usb">No USB connected</string>
 
+    <!-- Benzene Auto Brightness Button -->
+    <string name="accessibility_quick_settings_auto_brightness">Auto brightness</string>
+
     <!-- Network traffic indicator -->
     <string name="accessibility_network_traffic">Network traffic: <xliff:g id="speed" example="1.5 MB/s">%s</xliff:g></string>
 
