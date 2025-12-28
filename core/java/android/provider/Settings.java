@@ -7689,6 +7689,14 @@ public final class Settings {
         @Protected(readWrite = KnownSystemPackage.SETTINGS)
         public static final String HIDE_APPLIST_WHITELIST = "hide_applist_whitelist";
 
+        /**
+         * Whether to show auto brightness button in Quick Settings.
+         * 0 = hide, 1 = show
+         * @hide
+         */
+        @Protected(read = KnownSystemPackage.SYSTEM_UI, readWrite = KnownSystemPackage.SETTINGS)
+        public static final String QS_SHOW_AUTO_BRIGHTNESS = "qs_show_auto_brightness";
+
         /** @hide */
         @Protected(readWrite = KnownSystemPackage.SETTINGS)
         public static final String CROSS_PROFILE_CLIPBOARD_ACCESS = "cross_profile_clipboard_access";

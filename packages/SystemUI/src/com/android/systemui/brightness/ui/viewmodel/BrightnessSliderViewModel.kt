@@ -21,6 +21,7 @@ import androidx.annotation.DrawableRes
 import androidx.annotation.FloatRange
 import androidx.annotation.StringRes
 import androidx.compose.runtime.getValue
+import com.android.systemui.brightness.domain.interactor.AutoBrightnessInteractor
 import com.android.systemui.brightness.domain.interactor.BrightnessMirrorShowingInteractor
 import com.android.systemui.brightness.domain.interactor.BrightnessPolicyEnforcementInteractor
 import com.android.systemui.brightness.domain.interactor.ScreenBrightnessInteractor
@@ -62,6 +63,7 @@ constructor(
     @Assisted val supportsMirroring: Boolean,
     private val brightnessWarningToast: BrightnessWarningToast,
     private val imageLoader: ImageLoader,
+    private val autoBrightnessInteractor: AutoBrightnessInteractor,
 ) : HydratedActivatable() {
 
     init {
@@ -84,6 +86,25 @@ constructor(
     }
 
     val brightnessOverriddenByWindow = screenBrightnessInteractor.brightnessOverriddenByWindow
+
+    /** Whether automatic brightness mode is enabled */
+    val isAutomaticBrightnessEnabled = autoBrightnessInteractor.isAutomaticBrightnessEnabled
+
+    /** Whether automatic brightness is available on this device */
+    val isAutomaticBrightnessAvailable = autoBrightnessInteractor.isAutomaticBrightnessAvailable
+
+    /** Whether the auto brightness button should be shown in QS */
+    val showAutoBrightnessButton = autoBrightnessInteractor.showAutoBrightnessButton
+
+    /** Toggles automatic brightness mode on/off */
+    fun toggleAutomaticBrightness() {
+        autoBrightnessInteractor.toggleAutomaticBrightness()
+    }
+
+    /** Opens status bar settings */
+    fun openStatusBarSettings() {
+        autoBrightnessInteractor.openStatusBarSettings()
+    }
 
     fun showToast(viewContext: Context, @StringRes resId: Int) {
         if (brightnessWarningToast.isToastActive()) {

@@ -25,13 +25,20 @@ import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -50,6 +57,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.drawWithContent
@@ -58,6 +66,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.scale
@@ -69,7 +78,10 @@ import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.text
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.Dp
@@ -82,6 +94,7 @@ import com.android.compose.lifecycle.DisposableEffectWithLifecycle
 import com.android.compose.modifiers.padding
 import com.android.compose.modifiers.sliderPercentage
 import com.android.compose.modifiers.thenIf
+import com.android.compose.theme.LocalAndroidColorScheme
 import com.android.compose.ui.graphics.drawInOverlay
 import com.android.systemui.biometrics.Utils.toBitmap
 import com.android.systemui.brightness.domain.model.GammaBrightness
@@ -365,6 +378,9 @@ fun BrightnessSliderContainer(
             initialValue = PolicyRestriction.NoRestriction
         )
     val overriddenByAppState by viewModel.brightnessOverriddenByWindow.collectAsStateWithLifecycle()
+    val isAutoBrightnessEnabled by viewModel.isAutomaticBrightnessEnabled.collectAsStateWithLifecycle()
+    val showAutoBrightnessButton by viewModel.showAutoBrightnessButton.collectAsStateWithLifecycle()
+
     var dragging by remember { mutableStateOf(false) }
     var enabled by remember { mutableStateOf(false) }
 
@@ -390,62 +406,80 @@ fun BrightnessSliderContainer(
         )
 
     val isRestricted = restriction is PolicyRestriction.Restricted
-    Box(
+    Row(
         modifier =
             modifier
                 .padding(vertical = { dimensions.verticalPadding.roundToPx() })
                 .fillMaxWidth()
-                .sysuiResTag("brightness_slider")
+                .sysuiResTag("brightness_slider"),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        BrightnessSlider(
-            enabled = enabled && !isRestricted,
-            gammaValue = gamma,
-            valueRange = viewModel.minBrightness.value..viewModel.maxBrightness.value,
-            iconResProvider = BrightnessSliderViewModel::getIconForPercentage,
-            imageLoader = viewModel::loadImage,
-            restriction = restriction,
-            onRestrictedClick = viewModel::showPolicyRestrictionDialog,
-            onDrag = {
-                viewModel.setIsDragging(true)
-                dragging = true
-                coroutineScope.launch { viewModel.onDrag(Drag.Dragging(GammaBrightness(it))) }
-            },
-            onStop = {
-                viewModel.setIsDragging(false)
-                dragging = false
-                coroutineScope.launch { viewModel.onDrag(Drag.Stopped(GammaBrightness(it))) }
-            },
-            modifier =
-                Modifier.borderOnFocus(
-                        color = MaterialTheme.colorScheme.secondary,
-                        cornerSize = CornerSize(SliderTrackRoundedCorner),
+        Box(modifier = Modifier.weight(1f)) {
+            BrightnessSlider(
+                enabled = enabled && !isRestricted,
+                gammaValue = gamma,
+                valueRange = viewModel.minBrightness.value..viewModel.maxBrightness.value,
+                iconResProvider = BrightnessSliderViewModel::getIconForPercentage,
+                imageLoader = viewModel::loadImage,
+                restriction = restriction,
+                onRestrictedClick = viewModel::showPolicyRestrictionDialog,
+                onDrag = {
+                    viewModel.setIsDragging(true)
+                    dragging = true
+                    coroutineScope.launch { viewModel.onDrag(Drag.Dragging(GammaBrightness(it))) }
+                },
+                onStop = {
+                    viewModel.setIsDragging(false)
+                    dragging = false
+                    coroutineScope.launch { viewModel.onDrag(Drag.Stopped(GammaBrightness(it))) }
+                },
+                modifier =
+                    Modifier.borderOnFocus(
+                            color = MaterialTheme.colorScheme.secondary,
+                            cornerSize = CornerSize(SliderTrackRoundedCorner),
+                        )
+                        .then(if (viewModel.showMirror) Modifier.drawInOverlay() else Modifier)
+                        .sliderBackground(
+                            DpSize(
+                                dimensions.backgroundFrameWidth,
+                                dimensions.backgroundFrameHeight,
+                            ),
+                            dimensions.backgroundRoundedCorner,
+                            containerColor,
+                        )
+                        .fillMaxWidth()
+                        .pointerInteropFilter {
+                            if (
+                                it.actionMasked == MotionEvent.ACTION_UP ||
+                                    it.actionMasked == MotionEvent.ACTION_CANCEL
+                            ) {
+                                viewModel.emitBrightnessTouchForFalsing()
+                            }
+                            false
+                        },
+                hapticsViewModelFactory = viewModel.hapticsViewModelFactory,
+                overriddenByAppState = overriddenByAppState,
+                showToast = {
+                    viewModel.showToast(
+                        context,
+                        com.android.internal.R.string.brightness_unable_adjust_msg,
                     )
-                    .then(if (viewModel.showMirror) Modifier.drawInOverlay() else Modifier)
-                    .sliderBackground(
-                        DpSize(dimensions.backgroundFrameWidth, dimensions.backgroundFrameHeight),
-                        dimensions.backgroundRoundedCorner,
-                        containerColor,
-                    )
-                    .fillMaxWidth()
-                    .pointerInteropFilter {
-                        if (
-                            it.actionMasked == MotionEvent.ACTION_UP ||
-                                it.actionMasked == MotionEvent.ACTION_CANCEL
-                        ) {
-                            viewModel.emitBrightnessTouchForFalsing()
-                        }
-                        false
-                    },
-            hapticsViewModelFactory = viewModel.hapticsViewModelFactory,
-            overriddenByAppState = overriddenByAppState,
-            showToast = {
-                viewModel.showToast(
-                    context,
-                    com.android.internal.R.string.brightness_unable_adjust_msg,
-                )
-            },
-            dimensions = dimensions,
-        )
+                },
+                dimensions = dimensions,
+            )
+        }
+
+        // Auto brightness toggle button - only show if auto brightness is available on the device
+        // and the user hasn't disabled it in settings
+        if (showAutoBrightnessButton && viewModel.isAutomaticBrightnessAvailable) {
+            Spacer(modifier = Modifier.width(8.dp))
+            AutoBrightnessButton(
+                isEnabled = isAutoBrightnessEnabled,
+                onClick = { viewModel.toggleAutomaticBrightness() },
+                onLongClick = { viewModel.openStatusBarSettings() },
+                contentDescription = stringResource(R.string.accessibility_quick_settings_auto_brightness)
+            )
+        }
     }
 }
 
@@ -481,6 +515,147 @@ data class BrightnessSliderDimensions(
                 backgroundFrameHeight = 6.dp,
             )
     }
+}
+
+/**
+ * Auto brightness toggle button with sun icon containing "A" (auto) or "M" (manual)
+ * Styled to match the brightness slider colors
+ * Long press opens display settings
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun AutoBrightnessButton(
+    isEnabled: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    contentDescription: String,
+    modifier: Modifier = Modifier
+) {
+    // Match the slider's active track color when enabled, QS tile inactive color when disabled
+    val inactiveBackgroundColor = LocalAndroidColorScheme.current.surfaceEffect1
+    val buttonBackgroundColor by animateColorAsState(
+        if (isEnabled) MaterialTheme.colorScheme.primary
+        else inactiveBackgroundColor,
+        label = "buttonBackground"
+    )
+    val iconColor by animateColorAsState(
+        if (isEnabled) MaterialTheme.colorScheme.onPrimary
+        else MaterialTheme.colorScheme.onSurfaceVariant,
+        label = "iconColor"
+    )
+    val stateDesc = if (isEnabled) "On" else "Off"
+
+    Box(
+        modifier = modifier
+            .size(40.dp)
+            .drawWithCache {
+                val cornerRadius = CornerRadius(12.dp.toPx())
+                val scale = 24.dp.toPx() / 24f
+
+                val sunPath = createSunPath(scale)
+                val letterAPath = createLetterAPath(scale)
+                val letterMPath = createLetterMPath(scale)
+
+                onDrawBehind {
+                    drawRoundRect(
+                        color = buttonBackgroundColor,
+                        cornerRadius = cornerRadius
+                    )
+
+                    // Center the icon
+                    val iconOffset = (size.width - 24.dp.toPx()) / 2
+                    translate(iconOffset, iconOffset) {
+                        drawPath(sunPath, color = iconColor)
+                        drawPath(if (isEnabled) letterAPath else letterMPath, color = iconColor)
+                    }
+                }
+            }
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
+            )
+            .semantics {
+                text = AnnotatedString(contentDescription)
+                stateDescription = stateDesc
+                role = Role.Button
+            },
+        contentAlignment = Alignment.Center
+    ) {}
+}
+
+private fun createSunPath(scale: Float) = Path().apply {
+    // Outer boundary
+    moveTo(20f * scale, 8.69f * scale)
+    lineTo(20f * scale, 4f * scale)
+    lineTo(15.31f * scale, 4f * scale)
+    lineTo(12f * scale, 0.69f * scale)
+    lineTo(8.69f * scale, 4f * scale)
+    lineTo(4f * scale, 4f * scale)
+    lineTo(4f * scale, 8.69f * scale)
+    lineTo(0.69f * scale, 12f * scale)
+    lineTo(4f * scale, 15.31f * scale)
+    lineTo(4f * scale, 20f * scale)
+    lineTo(8.69f * scale, 20f * scale)
+    lineTo(12f * scale, 23.31f * scale)
+    lineTo(15.31f * scale, 20f * scale)
+    lineTo(20f * scale, 20f * scale)
+    lineTo(20f * scale, 15.31f * scale)
+    lineTo(23.31f * scale, 12f * scale)
+    close()
+
+    // Inner cutout
+    moveTo(18f * scale, 14.48f * scale)
+    lineTo(18f * scale, 18f * scale)
+    lineTo(14.48f * scale, 18f * scale)
+    lineTo(12f * scale, 20.48f * scale)
+    lineTo(9.52f * scale, 18f * scale)
+    lineTo(6f * scale, 18f * scale)
+    lineTo(6f * scale, 14.48f * scale)
+    lineTo(3.52f * scale, 12f * scale)
+    lineTo(6f * scale, 9.52f * scale)
+    lineTo(6f * scale, 6f * scale)
+    lineTo(9.52f * scale, 6f * scale)
+    lineTo(12f * scale, 3.52f * scale)
+    lineTo(14.48f * scale, 6f * scale)
+    lineTo(18f * scale, 6f * scale)
+    lineTo(18f * scale, 9.52f * scale)
+    lineTo(20.48f * scale, 12f * scale)
+    close()
+}
+
+private fun createLetterAPath(scale: Float) = Path().apply {
+    // Outer A shape
+    moveTo(11f * scale, 7f * scale)
+    lineTo(7.8f * scale, 16f * scale)
+    lineTo(9.7f * scale, 16f * scale)
+    lineTo(10.4f * scale, 14f * scale)
+    lineTo(13.6f * scale, 14f * scale)
+    lineTo(14.3f * scale, 16f * scale)
+    lineTo(16.2f * scale, 16f * scale)
+    lineTo(13f * scale, 7f * scale)
+    close()
+
+    // Inner triangle hole
+    moveTo(12f * scale, 9f * scale)
+    lineTo(13.15f * scale, 12.65f * scale)
+    lineTo(10.85f * scale, 12.65f * scale)
+    close()
+}
+
+private fun createLetterMPath(scale: Float) = Path().apply {
+    moveTo(7.93f * scale, 7f * scale)
+    lineTo(7.93f * scale, 16f * scale)
+    lineTo(9.68f * scale, 16f * scale)
+    lineTo(9.68f * scale, 10.5f * scale)
+    lineTo(12f * scale, 14f * scale)
+    lineTo(14.32f * scale, 10.5f * scale)
+    lineTo(14.32f * scale, 16f * scale)
+    lineTo(16.07f * scale, 16f * scale)
+    lineTo(16.07f * scale, 7f * scale)
+    lineTo(14f * scale, 7f * scale)
+    lineTo(12f * scale, 10.5f * scale)
+    lineTo(10f * scale, 7f * scale)
+    close()
 }
 
 private object InternalDimensions {

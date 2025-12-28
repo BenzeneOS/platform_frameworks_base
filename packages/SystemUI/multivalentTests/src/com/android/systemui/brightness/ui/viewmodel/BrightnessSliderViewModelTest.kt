@@ -23,6 +23,7 @@ import com.android.settingslib.display.BrightnessUtils
 import com.android.systemui.SysuiTestCase
 import com.android.systemui.brightness.data.model.LinearBrightness
 import com.android.systemui.brightness.data.repository.fakeScreenBrightnessRepository
+import com.android.systemui.brightness.domain.interactor.autoBrightnessInteractor
 import com.android.systemui.brightness.domain.interactor.brightnessMirrorShowingInteractor
 import com.android.systemui.brightness.domain.interactor.brightnessPolicyEnforcementInteractor
 import com.android.systemui.brightness.domain.interactor.screenBrightnessInteractor
@@ -272,6 +273,7 @@ class BrightnessSliderViewModelTest : SysuiTestCase() {
             supportsMirror,
             brightnessWarningToast,
             imageLoader,
+            autoBrightnessInteractor,
         )
     }
 }

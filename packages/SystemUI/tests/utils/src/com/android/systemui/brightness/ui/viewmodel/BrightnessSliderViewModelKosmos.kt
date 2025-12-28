@@ -16,6 +16,7 @@
 
 package com.android.systemui.brightness.ui.viewmodel
 
+import com.android.systemui.brightness.domain.interactor.autoBrightnessInteractor
 import com.android.systemui.brightness.domain.interactor.brightnessMirrorShowingInteractor
 import com.android.systemui.brightness.domain.interactor.brightnessPolicyEnforcementInteractor
 import com.android.systemui.brightness.domain.interactor.screenBrightnessInteractor
@@ -38,6 +39,7 @@ val Kosmos.brightnessSliderViewModelFactory: BrightnessSliderViewModel.Factory b
                     falsingInteractor = falsingInteractor,
                     brightnessWarningToast = brightnessWarningToast,
                     imageLoader = imageLoader,
+                    autoBrightnessInteractor = autoBrightnessInteractor,
                 )
             }
         }
