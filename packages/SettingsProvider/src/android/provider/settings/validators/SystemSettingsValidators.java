@@ -291,21 +291,21 @@ public class SystemSettingsValidators {
         VALIDATORS.put(System.NETWORK_TRAFFIC_REFRESH_INTERVAL,
                 new InclusiveIntegerRangeValidator(1, 10));
         VALIDATORS.put(System.NETWORK_TRAFFIC_HIDEARROW, BOOLEAN_VALIDATOR);
-        VALIDATORS.put(System.STATUS_BAR_AM_PM, new InclusiveIntegerRangeValidator(0, 2));
-        VALIDATORS.put(System.STATUS_BAR_CLOCK, new InclusiveIntegerRangeValidator(0, 3));
-        VALIDATORS.put(System.CARRIER_ON_LOCKSCREEN, BOOLEAN_VALIDATOR);
-        VALIDATORS.put(System.CARRIER_TEXT_OVERRIDE, value -> value == null || value.length() <= 50);
-        VALIDATORS.put(System.CUSTOM_NETWORK_TYPE_TEXT, value -> value == null || value.length() <= 10);
         VALIDATORS.put(System.DOUBLE_TAP_SLEEP_STATUS_BAR, BOOLEAN_VALIDATOR);
         VALIDATORS.put(System.DOUBLE_TAP_SLEEP_LOCKSCREEN, BOOLEAN_VALIDATOR);
         VALIDATORS.put(System.VOLUME_WAKE_SCREEN, BOOLEAN_VALIDATOR);
         VALIDATORS.put(System.LONG_PRESS_POWER_ACTION, new InclusiveIntegerRangeValidator(0, 3));
         VALIDATORS.put(System.TORCH_LONG_PRESS_POWER_TIMEOUT,
                 new InclusiveIntegerRangeValidator(0, 600));
+        VALIDATORS.put(System.STATUS_BAR_AM_PM, new InclusiveIntegerRangeValidator(0, 2));
+        VALIDATORS.put(System.STATUS_BAR_CLOCK, new InclusiveIntegerRangeValidator(0, 3));
         VALIDATORS.put(System.VOLBTN_MUSIC_CONTROLS, BOOLEAN_VALIDATOR);
         VALIDATORS.put(System.EDGE_LONG_SWIPE_ACTION, new InclusiveIntegerRangeValidator(0, 12));
         VALIDATORS.put(System.THREE_FINGER_SCREENSHOT, BOOLEAN_VALIDATOR);
         VALIDATORS.put(System.WIFI_STANDARD_ICON, BOOLEAN_VALIDATOR);
         VALIDATORS.put(System.HEADS_UP_TIMEOUT, new InclusiveIntegerRangeValidator(1, 60));
+        VALIDATORS.put(System.CARRIER_ON_LOCKSCREEN, BOOLEAN_VALIDATOR);
+        VALIDATORS.put(System.CARRIER_TEXT_OVERRIDE, value -> value == null || value.length() <= 50);
+        VALIDATORS.put(System.CUSTOM_NETWORK_TYPE_TEXT, value -> value == null || value.length() <= 10);
     }
 }
