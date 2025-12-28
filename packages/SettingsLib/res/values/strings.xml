@@ -1038,6 +1038,9 @@
     <!-- UI debug setting: scaling factor for all Animator-based animations [CHAR LIMIT=25] -->
     <string name="animator_duration_scale_title">Animator duration scale</string>
 
+    <!-- UI debug setting: select GPU renderer [CHAR LIMIT=25] -->
+    <string name="debug_hw_renderer">Set GPU Renderer</string>
+
     <!-- UI debug setting: simulate secondary display devices using overlays [CHAR LIMIT=45] -->
     <string name="overlay_display_devices_title">Simulate secondary displays</string>
 
