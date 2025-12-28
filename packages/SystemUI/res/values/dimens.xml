@@ -189,6 +189,11 @@
     <!-- End padding for left-aligned status bar clock -->
     <dimen name="status_bar_left_clock_end_padding">2sp</dimen>
 
+    <!-- Width of the network traffic view with arrows -->
+    <dimen name="status_bar_network_traffic_width">30dp</dimen>
+    <!-- Width of the network traffic view without arrows -->
+    <dimen name="status_bar_network_traffic_width_no_arrows">18dp</dimen>
+
     <!-- Margins before/after the new wifi icon -->
     <dimen name="status_bar_wifi_signal_horizontal_margin">3sp</dimen>
 

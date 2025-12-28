@@ -4583,4 +4583,15 @@
 
     <!-- Description for the Ambient Cue accessibility action label for expanding. [CHAR LIMIT=NONE] -->
     <string name="ambient_cue_expand_action">expand</string>
+
+    <!-- Network traffic indicator -->
+    <string name="accessibility_network_traffic">Network traffic: <xliff:g id="speed" example="1.5 MB/s">%s</xliff:g></string>
+
+    <!-- Network traffic units -->
+    <string name="kilobitspersecond_short" translatable="false">kb/s</string>
+    <string name="megabitspersecond_short" translatable="false">Mb/s</string>
+    <string name="gigabitspersecond_short" translatable="false">Gb/s</string>
+    <string name="kilobytespersecond_short" translatable="false">kB/s</string>
+    <string name="megabytespersecond_short" translatable="false">MB/s</string>
+    <string name="gigabytespersecond_short" translatable="false">GB/s</string>
 </resources>
