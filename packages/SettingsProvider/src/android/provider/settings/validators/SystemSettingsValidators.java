@@ -286,6 +286,15 @@ public class SystemSettingsValidators {
         VALIDATORS.put(
                 System.ACCESSIBILITY_FORCE_INVERT_COLOR_OVERRIDE_PACKAGES_TO_DISABLE,
                 new PackageNameListValidator(","));
+        VALIDATORS.put(System.NETWORK_TRAFFIC_ENABLED, BOOLEAN_VALIDATOR);
+        VALIDATORS.put(System.NETWORK_TRAFFIC_MODE, new InclusiveIntegerRangeValidator(0, 2));
+        VALIDATORS.put(System.NETWORK_TRAFFIC_AUTOHIDE, BOOLEAN_VALIDATOR);
+        VALIDATORS.put(System.NETWORK_TRAFFIC_AUTOHIDE_THRESHOLD,
+                new InclusiveIntegerRangeValidator(0, 10000));
+        VALIDATORS.put(System.NETWORK_TRAFFIC_UNITS, new InclusiveIntegerRangeValidator(0, 2));
+        VALIDATORS.put(System.NETWORK_TRAFFIC_REFRESH_INTERVAL,
+                new InclusiveIntegerRangeValidator(1, 10));
+        VALIDATORS.put(System.NETWORK_TRAFFIC_HIDEARROW, BOOLEAN_VALIDATOR);
         VALIDATORS.put(System.STATUS_BAR_AM_PM, new InclusiveIntegerRangeValidator(0, 2));
         VALIDATORS.put(System.STATUS_BAR_CLOCK, new InclusiveIntegerRangeValidator(0, 3));
     }
