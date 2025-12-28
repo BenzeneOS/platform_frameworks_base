@@ -7606,6 +7606,12 @@ public final class Settings {
         public static final String THREE_FINGER_SCREENSHOT = "three_finger_screenshot";
 
         /**
+         * WiFi standard icon display in status bar.
+         * @hide
+         */
+        public static final String WIFI_STANDARD_ICON = "wifi_standard_icon";
+
+        /**
          * Checks if the specified app can modify system settings. As of API
          * level 23, an app cannot modify system settings unless it declares the
          * {@link android.Manifest.permission#WRITE_SETTINGS}
