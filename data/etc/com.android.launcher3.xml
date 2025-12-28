@@ -18,6 +18,8 @@
     <privapp-permissions package="com.android.launcher3">
         <permission name="android.permission.ALLOW_SLIPPERY_TOUCHES"/>
         <permission name="android.permission.BIND_APPWIDGET"/>
+        <!-- Required for double tap to sleep on launcher -->
+        <permission name="android.permission.DEVICE_POWER"/>
         <permission name="android.permission.CONTROL_REMOTE_APP_TRANSITION_ANIMATIONS"/>
         <permission name="android.permission.GET_ACCOUNTS_PRIVILEGED"/>
         <permission name="android.permission.WRITE_SECURE_SETTINGS"/>

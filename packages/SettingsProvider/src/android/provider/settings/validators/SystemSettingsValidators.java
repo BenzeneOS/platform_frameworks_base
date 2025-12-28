@@ -295,5 +295,7 @@ public class SystemSettingsValidators {
         VALIDATORS.put(System.CARRIER_ON_LOCKSCREEN, BOOLEAN_VALIDATOR);
         VALIDATORS.put(System.CARRIER_TEXT_OVERRIDE, value -> value == null || value.length() <= 50);
         VALIDATORS.put(System.CUSTOM_NETWORK_TYPE_TEXT, value -> value == null || value.length() <= 10);
+        VALIDATORS.put(System.DOUBLE_TAP_SLEEP_STATUS_BAR, BOOLEAN_VALIDATOR);
+        VALIDATORS.put(System.DOUBLE_TAP_SLEEP_LOCKSCREEN, BOOLEAN_VALIDATOR);
     }
 }

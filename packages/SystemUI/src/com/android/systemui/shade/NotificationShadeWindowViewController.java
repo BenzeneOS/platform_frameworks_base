@@ -131,6 +131,8 @@ public class NotificationShadeWindowViewController implements Dumpable {
     private final GlanceableHubContainerController
             mGlanceableHubContainerController;
     private GestureDetector mPulsingWakeupGestureHandler;
+    private GestureDetector mDoubleTapToSleepGestureHandler;
+    private final DoubleTapToSleepGestureListener mDoubleTapToSleepGestureListener;
     private View mBrightnessMirror;
     private boolean mTouchActive;
     private boolean mTouchCancelled;
@@ -231,7 +233,8 @@ public class NotificationShadeWindowViewController implements Dumpable {
             @Main CoroutineDispatcher mainDispatcher,
             ShadeStatusBarComponentsInteractor shadeStatusBarComponentsInteractor,
             DozeTouchInteractor dozeTouchInteractor,
-            JavaAdapter javaAdapter) {
+            JavaAdapter javaAdapter,
+            DoubleTapToSleepGestureListener doubleTapToSleepGestureListener) {
         mLockscreenShadeTransitionController = transitionController;
         mFalsingCollector = falsingCollector;
         mStatusBarStateController = statusBarStateController;
@@ -260,6 +263,7 @@ public class NotificationShadeWindowViewController implements Dumpable {
         mQuickSettingsController = quickSettingsController;
         mMainDispatcher = mainDispatcher;
         mShadeStatusBarComponentsInteractor = shadeStatusBarComponentsInteractor;
+        mDoubleTapToSleepGestureListener = doubleTapToSleepGestureListener;
 
         // This view is not part of the newly inflated expanded status bar.
         mBrightnessMirror = mView.findViewById(R.id.brightness_mirror_container);
@@ -399,6 +403,8 @@ public class NotificationShadeWindowViewController implements Dumpable {
         mStackScrollLayout = mView.findViewById(R.id.notification_stack_scroller);
         mPulsingWakeupGestureHandler = new GestureDetector(mView.getContext(),
                 mPulsingGestureListener);
+        mDoubleTapToSleepGestureHandler = new GestureDetector(mView.getContext(),
+                mDoubleTapToSleepGestureListener);
         mView.setLayoutInsetsController(mNotificationInsetsController);
         mView.setWindowRootViewKeyEventHandler(mWindowRootViewKeyEventHandler);
         mView.setInteractionEventHandler(new NotificationShadeWindowView.InteractionEventHandler() {
@@ -461,7 +467,10 @@ public class NotificationShadeWindowViewController implements Dumpable {
                 }
 
                 mFalsingCollector.onTouchEvent(ev);
-                if (!SceneContainerFlag.isEnabled()) {
+                mDoubleTapToSleepGestureHandler.onTouchEvent(ev);
+                // Pass touch events to the pulsing gesture listener only if it's dozing,
+                // otherwise lockscreen DT2S and AOD DT2W will conflict.
+                if (!SceneContainerFlag.isEnabled() && mStatusBarStateController.isDozing()) {
                     mPulsingWakeupGestureHandler.onTouchEvent(ev);
                 }
 

@@ -7367,6 +7367,18 @@ public final class Settings {
         public static final String CUSTOM_NETWORK_TYPE_TEXT = "custom_network_type_text";
 
         /**
+         * Double tap on status bar to sleep.
+         * @hide
+         */
+        public static final String DOUBLE_TAP_SLEEP_STATUS_BAR = "double_tap_sleep_status_bar";
+
+        /**
+         * Double tap on lockscreen to sleep.
+         * @hide
+         */
+        public static final String DOUBLE_TAP_SLEEP_LOCKSCREEN = "double_tap_sleep_lockscreen";
+
+        /**
          * Checks if the specified app can modify system settings. As of API
          * level 23, an app cannot modify system settings unless it declares the
          * {@link android.Manifest.permission#WRITE_SETTINGS}
