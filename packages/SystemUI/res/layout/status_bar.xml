@@ -20,7 +20,7 @@
 <!--    android:background="@drawable/status_bar_closed_default_background" -->
 <com.android.systemui.statusbar.phone.PhoneStatusBarView
     xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:systemui="http://schemas.android.com/apk/res/com.android.systemui"
+    xmlns:systemui="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="@dimen/status_bar_height"
     android:id="@+id/status_bar"
@@ -94,14 +94,15 @@
                     <com.android.systemui.statusbar.policy.Clock
                         android:id="@+id/clock"
                         android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:minHeight="@dimen/status_bar_system_icons_height"
+                        android:layout_height="@dimen/status_bar_system_icons_height"
                         android:layout_gravity="center_vertical"
-                        android:textAppearance="@style/TextAppearance.StatusBar.Default"
+                        android:textAppearance="@style/TextAppearance.StatusBar.Default.Clock"
                         android:singleLine="true"
                         android:paddingStart="@dimen/status_bar_left_clock_starting_padding"
                         android:paddingEnd="@dimen/status_bar_left_clock_end_padding"
                         android:gravity="center_vertical|start"
+                        systemui:showDark="true"
+                        systemui:isStatusBar="true"
                     />
 
                     <include layout="@layout/ongoing_activity_chip_primary"
@@ -166,5 +167,26 @@
             </com.android.keyguard.AlphaOptimizedLinearLayout>
         </FrameLayout>
     </LinearLayout>
+
+    <com.android.keyguard.AlphaOptimizedLinearLayout
+        android:id="@+id/centered_area"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:paddingTop="@dimen/status_bar_padding_top"
+        >
+        <com.android.systemui.statusbar.policy.Clock
+            android:id="@+id/clock_center"
+            android:textAppearance="@style/TextAppearance.StatusBar.Default.Clock"
+            android:layout_width="wrap_content"
+            android:layout_height="@dimen/status_bar_system_icons_height"
+            android:singleLine="true"
+            android:gravity="center"
+            android:visibility="gone"
+            systemui:showDark="true"
+            systemui:isStatusBar="true"
+        />
+    </com.android.keyguard.AlphaOptimizedLinearLayout>
 
 </com.android.systemui.statusbar.phone.PhoneStatusBarView>

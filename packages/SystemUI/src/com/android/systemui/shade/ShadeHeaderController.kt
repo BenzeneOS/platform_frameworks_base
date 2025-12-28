@@ -24,6 +24,7 @@ import android.app.StatusBarManager
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
+import android.os.Handler
 import android.graphics.Insets
 import android.os.Bundle
 import android.os.Trace
@@ -55,12 +56,14 @@ import com.android.systemui.battery.BatteryMeterView
 import com.android.systemui.battery.BatteryMeterView.MODE_ESTIMATE
 import com.android.systemui.battery.BatteryMeterViewController
 import com.android.systemui.dagger.SysUISingleton
+import com.android.systemui.dagger.qualifiers.Main
 import com.android.systemui.demomode.DemoMode
 import com.android.systemui.demomode.DemoModeController
 import com.android.systemui.dump.DumpManager
 import com.android.systemui.plugins.ActivityStarter
 import com.android.systemui.qs.ChipVisibilityListener
 import com.android.systemui.qs.HeaderPrivacyIconsController
+import com.android.systemui.qs.UserSettingObserver
 import com.android.systemui.res.R
 import com.android.systemui.shade.ShadeHeaderController.Companion.HEADER_TRANSITION_ID
 import com.android.systemui.shade.ShadeHeaderController.Companion.LARGE_SCREEN_HEADER_CONSTRAINT
@@ -93,6 +96,7 @@ import com.android.systemui.statusbar.policy.NextAlarmController
 import com.android.systemui.statusbar.policy.VariableDateView
 import com.android.systemui.statusbar.policy.VariableDateViewController
 import com.android.systemui.util.ViewController
+import com.android.systemui.util.settings.SecureSettings
 import dagger.Lazy
 import java.io.PrintWriter
 import javax.inject.Inject
@@ -132,7 +136,16 @@ constructor(
     private val nextAlarmController: NextAlarmController,
     private val activityStarter: ActivityStarter,
     private val statusOverlayHoverListenerFactory: StatusOverlayHoverListenerFactory,
+    secureSettings: SecureSettings,
+    @Main mainHandler: Handler,
 ) : ViewController<View>(header), Dumpable {
+
+    private val qsHeaderClockSecondsObserver =
+        object : UserSettingObserver(secureSettings, mainHandler, "qs_header_clock_seconds", context.userId) {
+            override fun handleValueChanged(value: Int, observedChange: Boolean) {
+                clock.setForceShowSeconds(value != 0)
+            }
+        }
 
     private val statusBarContentInsetsProvider
         get() =
@@ -487,9 +500,12 @@ constructor(
         systemIconsHoverContainer.setOnHoverListener(
             statusOverlayHoverListenerFactory.createListener(systemIconsHoverContainer)
         )
+        qsHeaderClockSecondsObserver.isListening = true
+        clock.setForceShowSeconds(qsHeaderClockSecondsObserver.value != 0)
     }
 
     override fun onViewDetached() {
+        qsHeaderClockSecondsObserver.isListening = false
         clock.setOnClickListener(null)
         privacyIconsController.chipVisibilityListener = null
         dumpManager.unregisterDumpable(this::class.java.simpleName)

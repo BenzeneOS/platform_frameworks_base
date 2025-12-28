@@ -89,6 +89,7 @@ private constructor(
 
     private lateinit var battery: BatteryMeterView
     private lateinit var clock: Clock
+    val clockController by lazy { ClockController(context, mView) }
     private lateinit var startSideContainer: View
     private lateinit var endSideContainer: View
     private val statusBarContentInsetsProvider
@@ -164,13 +165,16 @@ private constructor(
         object : ConfigurationController.ConfigurationListener {
             override fun onDensityOrFontScaleChanged() {
                 ShadeWindowGoesAround.assertInLegacyMode()
-                clock.onDensityOrFontScaleChanged()
+                clockController.onDensityOrFontScaleChanged()
             }
         }
 
     override fun onViewAttached() {
         clock = mView.requireViewById(R.id.clock)
         battery = mView.requireViewById(R.id.battery)
+
+        // Initialize clockController to register tunable for clock position settings
+        clockController
 
         addDarkReceivers()
 
@@ -250,6 +254,7 @@ private constructor(
 
     @VisibleForTesting
     public override fun onViewDetached() {
+        clockController.removeTunable()
         removeDarkReceivers()
         startSideContainer.setOnHoverListener(null)
         endSideContainer.setOnHoverListener(null)
@@ -308,12 +313,12 @@ private constructor(
 
     private fun addDarkReceivers() {
         darkIconDispatcher.addDarkReceiver(battery)
-        darkIconDispatcher.addDarkReceiver(clock)
+        // darkIconDispatcher.addDarkReceiver(clock) Note: Clock views register themselves for dark mode via mShowDark attribute
     }
 
     private fun removeDarkReceivers() {
         darkIconDispatcher.removeDarkReceiver(battery)
-        darkIconDispatcher.removeDarkReceiver(clock)
+        // darkIconDispatcher.removeDarkReceiver(clock) Note: Clock views unregister themselves for dark mode via mShowDark attribute
     }
 
     inner class PhoneStatusBarViewTouchHandler : Gefingerpoken {
