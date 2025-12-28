@@ -14700,6 +14700,14 @@ public final class Settings {
         public static final String BATTERY_CHARGE_LIMIT = "battery_charge_limit";
 
         /** @hide */
+        @Protected(read = KnownSystemPackage.SYSTEM_UI, readWrite = KnownSystemPackage.SETTINGS)
+        public static final String BATTERY_CHARGE_STOP_LEVEL = "battery_charge_stop_level";
+
+        /** @hide */
+        @Protected(read = KnownSystemPackage.SYSTEM_UI, readWrite = KnownSystemPackage.SETTINGS)
+        public static final String BATTERY_CHARGE_START_LEVEL = "battery_charge_start_level";
+
+        /** @hide */
         @Protected(restrictReads = false, readWrite = {KnownSystemPackage.SETTINGS,
                 KnownSystemPackage.SETUP_WIZARD})
         public static final String NETWORK_LOCATION = "network_location";
