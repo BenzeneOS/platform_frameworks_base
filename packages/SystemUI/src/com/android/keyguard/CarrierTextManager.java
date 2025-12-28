@@ -17,6 +17,7 @@
 package com.android.keyguard;
 
 import static com.android.keyguard.logging.CarrierTextManagerLogger.REASON_ACTIVE_DATA_SUB_CHANGED;
+import static com.android.keyguard.logging.CarrierTextManagerLogger.REASON_CARRIER_ON_LOCKSCREEN_CHANGED;
 import static com.android.keyguard.logging.CarrierTextManagerLogger.REASON_ON_TELEPHONY_CAPABLE;
 import static com.android.keyguard.logging.CarrierTextManagerLogger.REASON_REFRESH_CARRIER_INFO;
 import static com.android.keyguard.logging.CarrierTextManagerLogger.REASON_SATELLITE_CHANGED;
@@ -27,7 +28,13 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.content.res.Resources;
+import android.database.ContentObserver;
+import android.net.Uri;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.Trace;
+import android.os.UserHandle;
+import android.provider.Settings;
 import android.telephony.ServiceState;
 import android.telephony.SubscriptionInfo;
 import android.telephony.TelephonyCallback.ActiveDataSubscriptionIdListener;
@@ -93,6 +100,10 @@ public class CarrierTextManager {
     private Job mSatelliteConnectionJob;
 
     @Nullable private String mSatelliteCarrierText;
+
+    private volatile boolean mShowCarrierText = true;
+    @Nullable private volatile String mCarrierTextOverride = null;
+    @Nullable private SettingsObserver mSettingsObserver;
 
     private final Context mContext;
     private final TelephonyManager mTelephonyManager;
@@ -231,6 +242,8 @@ public class CarrierTextManager {
                 });
             }
         });
+        mSettingsObserver = new SettingsObserver();
+        mSettingsObserver.observe();
     }
 
     private TelephonyManager getTelephonyManager() {
@@ -293,6 +306,10 @@ public class CarrierTextManager {
     private void handleSetListening(CarrierTextCallback callback) {
         if (callback != null) {
             mCarrierTextCallback = callback;
+            // Re-register settings observer if it was unregistered
+            if (mSettingsObserver != null) {
+                mSettingsObserver.observe();
+            }
             if (mNetworkSupported.get()) {
                 // Keyguard update monitor expects callbacks from main thread
                 mMainExecutor.execute(() -> {
@@ -324,6 +341,9 @@ public class CarrierTextManager {
             });
             mTelephonyListenerManager.removeActiveDataSubscriptionIdListener(mPhoneStateListener);
             cancelSatelliteCollectionJob(/* reason= */ "#handleSetListening has null callback");
+            if (mSettingsObserver != null) {
+                mContext.getContentResolver().unregisterContentObserver(mSettingsObserver);
+            }
         }
     }
 
@@ -456,6 +476,15 @@ public class CarrierTextManager {
         }
 
         boolean isInSatelliteMode = mSatelliteCarrierText != null;
+
+        // Hide the carrier text if the user requests
+        if (!mShowCarrierText) {
+            displayText = "";
+        } else if (mCarrierTextOverride != null) {
+            // Use custom carrier text if set
+            displayText = mCarrierTextOverride;
+        }
+
         final CarrierTextCallbackInfo info = new CarrierTextCallbackInfo(
                 displayText,
                 carrierNames,
@@ -667,6 +696,41 @@ public class CarrierTextManager {
         if (job != null) {
             mLogger.logStopListeningForSatelliteCarrierText(reason);
             job.cancel(new CancellationException(reason));
+        }
+    }
+
+    private class SettingsObserver extends ContentObserver {
+        SettingsObserver() {
+            super(new Handler(Looper.getMainLooper()));
+        }
+
+        void observe() {
+            mContext.getContentResolver().unregisterContentObserver(this);
+            mContext.getContentResolver().registerContentObserver(Settings.System.getUriFor(
+                    Settings.System.CARRIER_ON_LOCKSCREEN), false, this,
+                    UserHandle.USER_ALL);
+            mContext.getContentResolver().registerContentObserver(Settings.System.getUriFor(
+                    Settings.System.CARRIER_TEXT_OVERRIDE), false, this,
+                    UserHandle.USER_ALL);
+            updateSettings();
+        }
+
+        void updateSettings() {
+            mShowCarrierText = Settings.System.getIntForUser(mContext.getContentResolver(),
+                Settings.System.CARRIER_ON_LOCKSCREEN, 1, UserHandle.USER_CURRENT) != 0;
+            String override = Settings.System.getStringForUser(mContext.getContentResolver(),
+                Settings.System.CARRIER_TEXT_OVERRIDE, UserHandle.USER_CURRENT);
+            mCarrierTextOverride = (override != null && !override.isEmpty()) ? override : null;
+        }
+
+        @Override
+        public void onChange(boolean selfChange, Uri uri) {
+            if (Settings.System.getUriFor(Settings.System.CARRIER_ON_LOCKSCREEN).equals(uri)
+                    || Settings.System.getUriFor(Settings.System.CARRIER_TEXT_OVERRIDE).equals(uri)) {
+                mLogger.logUpdateCarrierTextForReason(REASON_CARRIER_ON_LOCKSCREEN_CHANGED);
+                updateSettings();
+                updateCarrierText();
+            }
         }
     }
 

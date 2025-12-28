@@ -57,6 +57,11 @@ interface MobileIconViewModelCommon {
     val activityInVisible: Flow<Boolean>
     val activityOutVisible: Flow<Boolean>
     val activityContainerVisible: Flow<Boolean>
+    /**
+     * Custom network type text set by the user. When non-empty, this text should be displayed
+     * instead of the network type icon (LTE, 5G, etc.). Empty string means use default behavior.
+     */
+    val customNetworkTypeText: StateFlow<String>
 }
 
 /**
@@ -77,6 +82,7 @@ class MobileIconViewModel(
     iconInteractor: MobileIconInteractor,
     airplaneModeInteractor: AirplaneModeInteractor,
     constants: ConnectivityConstants,
+    override val customNetworkTypeText: StateFlow<String>,
     scope: CoroutineScope,
 ) : MobileIconViewModelCommon {
     private val cellProvider by lazy {
@@ -85,6 +91,7 @@ class MobileIconViewModel(
             iconInteractor,
             airplaneModeInteractor,
             constants,
+            customNetworkTypeText,
             scope,
         )
     }
@@ -94,6 +101,7 @@ class MobileIconViewModel(
             subscriptionId,
             airplaneModeInteractor,
             iconInteractor,
+            customNetworkTypeText,
             scope,
         )
     }
@@ -148,6 +156,7 @@ private class CarrierBasedSatelliteViewModelImpl(
     override val subscriptionId: Int,
     airplaneModeInteractor: AirplaneModeInteractor,
     interactor: MobileIconInteractor,
+    override val customNetworkTypeText: StateFlow<String>,
     scope: CoroutineScope,
 ) : MobileIconViewModelCommon {
     override val isVisible: StateFlow<Boolean> =
@@ -175,6 +184,7 @@ private class CellularIconViewModel(
     iconInteractor: MobileIconInteractor,
     airplaneModeInteractor: AirplaneModeInteractor,
     constants: ConnectivityConstants,
+    override val customNetworkTypeText: StateFlow<String>,
     scope: CoroutineScope,
 ) : MobileIconViewModelCommon {
     override val isVisible: StateFlow<Boolean> =

@@ -7349,6 +7349,24 @@ public final class Settings {
         public static final String STATUS_BAR_CLOCK = "status_bar_clock";
 
         /**
+         * Whether to show carrier name on lockscreen.
+         * @hide
+         */
+        public static final String CARRIER_ON_LOCKSCREEN = "carrier_on_lockscreen";
+
+        /**
+         * Custom carrier text override.
+         * @hide
+         */
+        public static final String CARRIER_TEXT_OVERRIDE = "carrier_text_override";
+
+        /**
+         * Custom network type text (replaces 4G/LTE/5G etc).
+         * @hide
+         */
+        public static final String CUSTOM_NETWORK_TYPE_TEXT = "custom_network_type_text";
+
+        /**
          * Checks if the specified app can modify system settings. As of API
          * level 23, an app cannot modify system settings unless it declares the
          * {@link android.Manifest.permission#WRITE_SETTINGS}
