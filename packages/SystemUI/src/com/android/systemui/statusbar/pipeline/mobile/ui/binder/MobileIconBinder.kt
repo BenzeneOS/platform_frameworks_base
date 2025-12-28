@@ -40,12 +40,14 @@ import com.android.systemui.statusbar.StatusBarIconView.STATE_HIDDEN
 import com.android.systemui.statusbar.core.NewStatusBarIcons
 import com.android.systemui.statusbar.pipeline.mobile.domain.model.SignalIconModel
 import com.android.systemui.statusbar.pipeline.mobile.ui.MobileViewLogger
+import com.android.systemui.statusbar.pipeline.mobile.ui.drawable.NetworkTypeTextDrawable
 import com.android.systemui.statusbar.pipeline.mobile.ui.viewmodel.LocationBasedMobileViewModel
 import com.android.systemui.statusbar.pipeline.shared.ui.binder.ModernStatusBarViewBinding
 import com.android.systemui.statusbar.pipeline.shared.ui.binder.ModernStatusBarViewVisibilityHelper
 import com.android.systemui.util.kotlin.pairwiseBy
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 
 data class MobileIconColors(@ColorInt val tint: Int, @ColorInt val contrast: Int)
@@ -66,6 +68,7 @@ object MobileIconBinder {
         val networkTypeView = view.requireViewById<ImageView>(R.id.mobile_type)
         val networkTypeContainer = view.requireViewById<FrameLayout>(R.id.mobile_type_container)
         val iconView = view.requireViewById<ImageView>(R.id.mobile_signal)
+        val density = view.resources.displayMetrics.density
         val mobileDrawable = SignalDrawable(view.context)
         val roamingView = view.requireViewById<ImageView>(R.id.mobile_roaming)
         val roamingSpace = view.requireViewById<Space>(R.id.mobile_roaming_space)
@@ -187,18 +190,40 @@ object MobileIconBinder {
                         }
                     }
 
-                    // Set the network type icon
+                    // Set the network type icon OR custom drawable
                     launch {
-                        viewModel.networkTypeIcon.distinctUntilChanged().collect { dataTypeId ->
+                        combine(
+                            viewModel.networkTypeIcon.distinctUntilChanged(),
+                            viewModel.customNetworkTypeText
+                        ) { dataTypeId, customText -> Pair(dataTypeId, customText) }
+                        .collect { (dataTypeId, customText) ->
                             viewModel.verboseLogger?.logBinderReceivedNetworkTypeIcon(
                                 view,
                                 viewModel.subscriptionId,
                                 dataTypeId,
                             )
-                            dataTypeId?.let { IconViewBinder.bind(dataTypeId, networkTypeView) }
+
                             val prevVis = networkTypeContainer.visibility
-                            networkTypeContainer.visibility =
-                                if (dataTypeId != null) VISIBLE else GONE
+                            val useCustomText = customText.isNotBlank()
+
+                            if (useCustomText) {
+                                // Create custom drawable that matches the vector icon style
+                                val customDrawable = NetworkTypeTextDrawable(customText, density)
+                                customDrawable.setTint(iconTint.value.tint)
+                                networkTypeView.setImageDrawable(customDrawable)
+                                networkTypeView.visibility = VISIBLE
+                                networkTypeContainer.visibility = VISIBLE
+                            } else {
+                                // Default behavior - show network type icon
+                                if (dataTypeId != null) {
+                                    IconViewBinder.bind(dataTypeId, networkTypeView)
+                                    networkTypeView.visibility = VISIBLE
+                                } else {
+                                    networkTypeView.visibility = GONE
+                                }
+                                networkTypeContainer.visibility =
+                                    if (dataTypeId != null) VISIBLE else GONE
+                            }
 
                             if (prevVis != networkTypeContainer.visibility) {
                                 view.requestLayout()
@@ -212,15 +237,17 @@ object MobileIconBinder {
                             networkTypeContainer.setBackgroundResource(background?.resId ?: 0)
 
                             // Tint will invert when this bit changes
-                            if (background?.resId != null) {
+                            val tintColor = if (background?.resId != null) {
                                 networkTypeContainer.backgroundTintList =
                                     ColorStateList.valueOf(iconTint.value.tint)
-                                networkTypeView.imageTintList =
-                                    ColorStateList.valueOf(iconTint.value.contrast)
+                                iconTint.value.contrast
                             } else {
-                                networkTypeView.imageTintList =
-                                    ColorStateList.valueOf(iconTint.value.tint)
+                                iconTint.value.tint
                             }
+
+                            // Apply tint to both regular icons and custom drawables
+                            networkTypeView.imageTintList = ColorStateList.valueOf(tintColor)
+                            (networkTypeView.drawable as? NetworkTypeTextDrawable)?.setTint(tintColor)
                         }
                     }
 

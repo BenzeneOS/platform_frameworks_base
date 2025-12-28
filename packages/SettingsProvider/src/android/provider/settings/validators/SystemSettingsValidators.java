@@ -297,5 +297,8 @@ public class SystemSettingsValidators {
         VALIDATORS.put(System.NETWORK_TRAFFIC_HIDEARROW, BOOLEAN_VALIDATOR);
         VALIDATORS.put(System.STATUS_BAR_AM_PM, new InclusiveIntegerRangeValidator(0, 2));
         VALIDATORS.put(System.STATUS_BAR_CLOCK, new InclusiveIntegerRangeValidator(0, 3));
+        VALIDATORS.put(System.CARRIER_ON_LOCKSCREEN, BOOLEAN_VALIDATOR);
+        VALIDATORS.put(System.CARRIER_TEXT_OVERRIDE, value -> value == null || value.length() <= 50);
+        VALIDATORS.put(System.CUSTOM_NETWORK_TYPE_TEXT, value -> value == null || value.length() <= 10);
     }
 }

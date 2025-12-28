@@ -35,6 +35,8 @@ import com.android.systemui.statusbar.pipeline.mobile.StatusBarMobileIconKairos
 import com.android.systemui.statusbar.pipeline.mobile.data.repository.CarrierConfigCoreStartable
 import com.android.systemui.statusbar.pipeline.mobile.data.repository.CarrierConfigRepository
 import com.android.systemui.statusbar.pipeline.mobile.data.repository.CarrierConfigRepositoryImpl
+import com.android.systemui.statusbar.pipeline.mobile.data.repository.CustomNetworkTypeRepository
+import com.android.systemui.statusbar.pipeline.mobile.data.repository.CustomNetworkTypeRepositoryImpl
 import com.android.systemui.statusbar.pipeline.mobile.data.repository.MobileConnectionsRepository
 import com.android.systemui.statusbar.pipeline.mobile.data.repository.MobileConnectionsRepositoryKairosAdapter
 import com.android.systemui.statusbar.pipeline.mobile.data.repository.MobileRepositorySwitcher
@@ -148,6 +150,11 @@ abstract class StatusBarPipelineModule {
 
     @Binds
     abstract fun carrierConfigRepository(impl: CarrierConfigRepositoryImpl): CarrierConfigRepository
+
+    @Binds
+    abstract fun customNetworkTypeRepository(
+        impl: CustomNetworkTypeRepositoryImpl
+    ): CustomNetworkTypeRepository
 
     @Binds
     abstract fun subscriptionManagerProxy(
