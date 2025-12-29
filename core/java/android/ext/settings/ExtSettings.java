@@ -48,6 +48,9 @@ public class ExtSettings {
             // inherit lockscreen PIN setting by default
             SCRAMBLE_LOCKSCREEN_PIN_LAYOUT_PRIMARY::get);
 
+    public static final BoolSetting REQUIRE_UNLOCK_FOR_POWER_MENU = new BoolSetting(
+            Setting.Scope.PER_USER, Settings.Secure.REQUIRE_UNLOCK_FOR_POWER_MENU, false);
+
     public static final BoolSysProperty ALLOW_GOOGLE_APPS_SPECIAL_ACCESS_TO_ACCELERATORS = new BoolSysProperty(
             // also accessed in native code, in frameworks/native/cmds/servicemanager/Access.cpp
             "persist.sys.allow_google_apps_special_access_to_accelerators", true);

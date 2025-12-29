@@ -37,6 +37,8 @@ import android.annotation.Nullable;
 import android.app.ActivityManager;
 import android.app.Dialog;
 import android.app.IActivityManager;
+import android.app.KeyguardManager;
+import android.app.PendingIntent;
 import android.app.WallpaperManager;
 import android.app.trust.TrustManager;
 import android.content.BroadcastReceiver;
@@ -205,6 +207,10 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
 
     private static final int DIALOG_WINDOW_TYPE = TYPE_STATUS_BAR_SUB_PANEL;
 
+    // Broadcast action for power menu credential authentication callback
+    private static final String ACTION_POWER_MENU_AUTHENTICATED =
+            "com.android.systemui.globalactions.POWER_MENU_AUTHENTICATED";
+
     @NonNull
     private final Context mContext;
     @NonNull
@@ -317,6 +323,11 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
      */
     @Nullable
     private CountDownLatch mDismissLatchForTesting;
+
+    // For PIN-protected power menu
+    private final KeyguardManager mKeyguardManager;
+    private Runnable mPendingPowerAction;
+    private BroadcastReceiver mAuthenticationReceiver;
 
     private final UserTracker.Callback mOnUserSwitched = new UserTracker.Callback() {
         @Override
@@ -491,6 +502,25 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
             }
         };
 
+        // Initialize KeyguardManager for PIN-protected power menu
+        mKeyguardManager = mContext.getSystemService(KeyguardManager.class);
+
+        // Register receiver for power menu authentication callback
+        mAuthenticationReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                if (ACTION_POWER_MENU_AUTHENTICATED.equals(intent.getAction())) {
+                    if (mPendingPowerAction != null) {
+                        mPendingPowerAction.run();
+                        mPendingPowerAction = null;
+                    }
+                }
+            }
+        };
+        IntentFilter authFilter = new IntentFilter(ACTION_POWER_MENU_AUTHENTICATED);
+        mContext.registerReceiver(mAuthenticationReceiver, authFilter,
+                Context.RECEIVER_NOT_EXPORTED);
+
         // receive broadcasts
         IntentFilter filter = new IntentFilter();
         filter.addAction(Intent.ACTION_CLOSE_SYSTEM_DIALOGS);
@@ -540,6 +570,10 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
         mConfigurationController.removeCallback(this);
         if (mShowSilentToggle) {
             mRingerModeTracker.getRingerMode().removeObservers(this);
+        }
+        // Unregister power menu authentication receiver
+        if (mAuthenticationReceiver != null) {
+            mContext.unregisterReceiver(mAuthenticationReceiver);
         }
     }
 
@@ -946,6 +980,67 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
         }
     }
 
+    private boolean isUnlockRequiredForPowerMenu() {
+        int userId = mUserTracker.getUserId();
+        boolean settingEnabled = mSecureSettings.getIntForUser(
+                Settings.Secure.REQUIRE_UNLOCK_FOR_POWER_MENU, 0, userId) != 0;
+        boolean hasCredential = mLockPatternUtils.isSecure(userId);
+        return settingEnabled && hasCredential;
+    }
+
+    /**
+     * Prompts the user to confirm their device credentials before executing a power action.
+     * This is used when Settings.Secure.REQUIRE_UNLOCK_FOR_POWER_MENU is enabled.
+     *
+     * @param action The action to execute after successful authentication
+     * @return true if the authentication flow was started, false if credentials couldn't be created
+     */
+    private boolean requireCredentialThenExecute(Runnable action) {
+        if (mKeyguardManager == null) {
+            return false;
+        }
+        int userId = mUserTracker.getUserId();
+
+        // Create the confirm credential intent
+        final Intent credentialIntent = mKeyguardManager.createConfirmDeviceCredentialIntent(
+                null, null, userId);
+        if (credentialIntent == null) {
+            // No credential set (shouldn't happen since isUnlockRequiredForPowerMenu checks this)
+            return false;
+        }
+
+        // Store the pending action
+        mPendingPowerAction = action;
+
+        // Create callback intent for when authentication succeeds
+        final Intent callBackIntent = new Intent(ACTION_POWER_MENU_AUTHENTICATED);
+        callBackIntent.setPackage(mContext.getPackageName());
+
+        PendingIntent callBackPendingIntent = PendingIntent.getBroadcast(
+                mContext,
+                0,
+                callBackIntent,
+                PendingIntent.FLAG_CANCEL_CURRENT |
+                        PendingIntent.FLAG_ONE_SHOT |
+                        PendingIntent.FLAG_IMMUTABLE);
+
+        credentialIntent.putExtra(Intent.EXTRA_INTENT, callBackPendingIntent.getIntentSender());
+
+        // Dismiss the power menu dialog before showing authentication
+        dismissDialog();
+
+        try {
+            ActivityManager.getService().startConfirmDeviceCredentialIntent(
+                    credentialIntent, null /* options */);
+        } catch (RemoteException ex) {
+            Log.e(TAG, "Error starting credential confirmation", ex);
+            mPendingPowerAction = null;
+            return false;
+        }
+
+        return true;
+    }
+
     @VisibleForTesting
     final class ShutDownAction extends SinglePressAction implements LongPressAction {
         ShutDownAction() {
@@ -959,6 +1054,16 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
             // tests via monkey
             if (ActivityManager.isUserAMonkey()) {
                 return false;
+            }
+            if (isUnlockRequiredForPowerMenu()) {
+                requireCredentialThenExecute(() -> {
+                    mUiEventLogger.log(GlobalActionsEvent.GA_SHUTDOWN_LONG_PRESS);
+                    if (!mUserManager.hasUserRestriction(UserManager.DISALLOW_SAFE_BOOT,
+                            mUserTracker.getUserHandle())) {
+                        mWindowManagerFuncs.reboot(true);
+                    }
+                });
+                return true;
             }
             mUiEventLogger.log(GlobalActionsEvent.GA_SHUTDOWN_LONG_PRESS);
             if (!mUserManager.hasUserRestrictionForUser(UserManager.DISALLOW_SAFE_BOOT,
@@ -984,6 +1089,13 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
             // don't actually trigger the shutdown if we are running stability
             // tests via monkey
             if (ActivityManager.isUserAMonkey()) {
+                return;
+            }
+            if (isUnlockRequiredForPowerMenu()) {
+                requireCredentialThenExecute(() -> {
+                    mUiEventLogger.log(GlobalActionsEvent.GA_SHUTDOWN_PRESS);
+                    mWindowManagerFuncs.shutdown();
+                });
                 return;
             }
             mUiEventLogger.log(GlobalActionsEvent.GA_SHUTDOWN_PRESS);
@@ -1094,6 +1206,16 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
             if (ActivityManager.isUserAMonkey()) {
                 return false;
             }
+            if (isUnlockRequiredForPowerMenu()) {
+                requireCredentialThenExecute(() -> {
+                    mUiEventLogger.log(GlobalActionsEvent.GA_REBOOT_LONG_PRESS);
+                    if (!mUserManager.hasUserRestriction(UserManager.DISALLOW_SAFE_BOOT,
+                            mUserTracker.getUserHandle())) {
+                        mWindowManagerFuncs.reboot(true);
+                    }
+                });
+                return true;
+            }
             mUiEventLogger.log(GlobalActionsEvent.GA_REBOOT_LONG_PRESS);
             if (!mUserManager.hasUserRestrictionForUser(UserManager.DISALLOW_SAFE_BOOT,
                     mUserTracker.getUserHandle())) {
@@ -1118,6 +1240,13 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
             // don't actually trigger the reboot if we are running stability
             // tests via monkey
             if (ActivityManager.isUserAMonkey()) {
+                return;
+            }
+            if (isUnlockRequiredForPowerMenu()) {
+                requireCredentialThenExecute(() -> {
+                    mUiEventLogger.log(GlobalActionsEvent.GA_REBOOT_PRESS);
+                    mWindowManagerFuncs.reboot(false);
+                });
                 return;
             }
             mUiEventLogger.log(GlobalActionsEvent.GA_REBOOT_PRESS);
