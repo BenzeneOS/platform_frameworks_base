@@ -2508,6 +2508,84 @@ public class ComputerEngine implements Computer {
     }
 
     /**
+     * Returns whether caller is the current default home/launcher app.
+     */
+    private boolean isCallerHome(int callingUid, int userId) {
+        final String home = mDefaultAppProvider.getDefaultHome(userId);
+        if (home == null) return false;
+        return isCallerSameApp(home, callingUid);
+    }
+
+    /**
+     * Returns whether caller is system, root, shell, or an updated system app.
+     */
+    private boolean isCallerSystemOrUpdatedSystemApp(int callingUid) {
+        if (isSystemOrRootOrShell(callingUid)) {
+            return true;
+        }
+        final SettingBase callingPs = mSettings.getSettingBase(UserHandle.getAppId(callingUid));
+        if (callingPs == null) return false;
+        final int callingFlags = callingPs.getFlags();
+        return ((callingFlags & ApplicationInfo.FLAG_SYSTEM) == ApplicationInfo.FLAG_SYSTEM)
+                || ((callingFlags & ApplicationInfo.FLAG_UPDATED_SYSTEM_APP)
+                        == ApplicationInfo.FLAG_UPDATED_SYSTEM_APP);
+    }
+
+    /**
+     * Custom filtering for hide app list feature.
+     * Returns true if the target app should be hidden from the caller.
+     */
+    private boolean shouldFilterApplicationCustom(
+            @Nullable PackageStateInternal ps, int callingUid, int userId) {
+        if (!android.os.SystemProperties.getBoolean("sys.boot_completed", false)) {
+            return false;
+        }
+        if (ps == null) return false;
+
+        final String packageName = ps.getPackageName();
+        if (packageName == null) return false;
+
+        // If the target and caller are the same application, don't filter
+        if (isCallerSameApp(packageName, callingUid)) {
+            return false;
+        }
+        // If the caller is system, root, shell, or updated system app, don't filter
+        if (isCallerSystemOrUpdatedSystemApp(callingUid)) {
+            return false;
+        }
+        // If the caller is the current default home/launcher, don't filter
+        if (isCallerHome(callingUid, userId)) {
+            return false;
+        }
+        // If the caller is in the whitelist, don't filter
+        if (isCallerWhitelisted(callingUid, userId)) {
+            return false;
+        }
+        // If the target is in the hide list, filter it
+        if (com.android.internal.util.HideAppListUtils.shouldHideAppList(mContext, packageName, userId)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Returns whether caller is in the whitelist of apps allowed to see all apps.
+     */
+    private boolean isCallerWhitelisted(int callingUid, int userId) {
+        final String[] callerPackages = getPackagesForUidInternal(callingUid, android.os.Process.SYSTEM_UID);
+        if (callerPackages == null || callerPackages.length == 0) {
+            return false;
+        }
+        for (String pkg : callerPackages) {
+            if (com.android.internal.util.HideAppListUtils.isCallerWhitelisted(mContext, pkg, userId)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Returns whether or not access to the application should be filtered.
      * <p>
      * Access may be limited based upon whether the calling or target applications
@@ -2539,6 +2617,10 @@ public class ComputerEngine implements Computer {
         final boolean callerIsInstantApp = instantAppPkgName != null;
         final boolean packageArchivedForUser = ps != null && PackageArchiver.isArchived(
                 ps.getUserStateOrDefault(userId));
+        // Check if app should be hidden via hide app list feature
+        if (shouldFilterApplicationCustom(ps, callingUid, userId)) {
+            return true;
+        }
         // Don't treat hiddenUntilInstalled as an uninstalled state, phone app needs to access
         // these hidden application details to customize carrier apps. Also, allowing the system
         // caller accessing to application across users.

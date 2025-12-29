@@ -191,6 +191,7 @@ java_library_static {
     ],
 
     static_libs: [
+        "kotlin-stdlib",
         "android.frameworks.vibrator-V1-java", // AIDL
         "android.frameworks.devicestate-V1-java", // AIDL
         "android.hardware.authsecret-V1.0-java",
