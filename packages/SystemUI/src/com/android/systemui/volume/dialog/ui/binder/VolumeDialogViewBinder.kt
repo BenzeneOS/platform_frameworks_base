@@ -235,7 +235,9 @@ constructor(
      */
     private fun View.applyAnimationProgress(fraction: Float) {
         alpha = ceil(fraction)
-        translationX = lerp(width, 0, fraction).toFloat()
+        // For RTL layout (left-side panel), animate from -width; for LTR, animate from +width
+        val startX = if (layoutDirection == View.LAYOUT_DIRECTION_RTL) -width else width
+        translationX = lerp(startX, 0, fraction).toFloat()
     }
 
     private suspend fun View.applyVerticalOffset(offsetPx: Float, shouldAnimate: Boolean) {

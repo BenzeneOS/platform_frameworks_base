@@ -528,5 +528,9 @@ public class GlobalSettingsValidators {
         VALIDATORS.put(Global.AIRPLANE_MODE_SYNC, BOOLEAN_VALIDATOR);
         VALIDATORS.put(Global.SCENE_CONTAINER_ENABLED, BOOLEAN_VALIDATOR);
         VALIDATORS.put(Global.Wearable.WEAR_SATELLITE_MODE_ENABLED, BOOLEAN_VALIDATOR);
+
+        // ExtSettings BEGIN
+        VALIDATORS.put(Global.VOLUME_PANEL_ON_LEFT, BOOLEAN_VALIDATOR);
+        // ExtSettings END
     }
 }
