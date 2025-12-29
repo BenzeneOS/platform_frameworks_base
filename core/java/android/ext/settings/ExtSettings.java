@@ -73,6 +73,15 @@ public class ExtSettings {
     public static final BoolSetting VOLUME_PANEL_ON_LEFT = new BoolSetting(
             Setting.Scope.GLOBAL, Settings.Global.VOLUME_PANEL_ON_LEFT, false);
 
+    // Whether clipboard auto-clear is enabled
+    public static final BoolSetting CLIPBOARD_AUTO_CLEAR_ENABLED = new BoolSetting(
+            Setting.Scope.GLOBAL, Settings.Global.CLIPBOARD_AUTO_CLEAR_ENABLED, true);
+
+    // The amount of time in milliseconds before the clipboard is auto-cleared
+    public static final IntSetting CLIPBOARD_AUTO_CLEAR_TIMEOUT = new IntSetting(
+            Setting.Scope.GLOBAL, Settings.Global.CLIPBOARD_AUTO_CLEAR_TIMEOUT,
+            (int) TimeUnit.HOURS.toMillis(1));  // default: 1 hour
+
     public static final BoolSysProperty ALLOW_NATIVE_DEBUG_BY_DEFAULT = new BoolSysProperty(
             "persist.native_debug", defaultBool(R.bool.setting_default_allow_native_debugging));
 

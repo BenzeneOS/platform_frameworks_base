@@ -14695,6 +14695,13 @@ public final class Settings {
         @Protected(read = KnownSystemPackage.SYSTEM_UI, readWrite = KnownSystemPackage.SETTINGS)
         public static final String VOLUME_PANEL_ON_LEFT = "volume_panel_on_left";
 
+        /** @hide */
+        @Protected(readWrite = KnownSystemPackage.SETTINGS)
+        public static final String CLIPBOARD_AUTO_CLEAR_ENABLED = "clipboard_auto_clear_enabled";
+
+        /** @hide */
+        @Protected(readWrite = KnownSystemPackage.SETTINGS)
+        public static final String CLIPBOARD_AUTO_CLEAR_TIMEOUT = "clipboard_auto_clear_timeout";
 
         // ExtSettings END
 
