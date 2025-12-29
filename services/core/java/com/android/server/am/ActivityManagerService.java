@@ -1636,6 +1636,10 @@ public class ActivityManagerService extends IActivityManager.Stub
     @GuardedBy("this")
     boolean mDeterministicUidIdle = false;
 
+    // Three-finger gesture screenshot support
+    private volatile boolean mThreeFingersSwipeEnabled = false;
+    private volatile boolean mThreeFingerGestureActive = false;
+
     @VisibleForTesting
     public WindowManagerService mWindowManager;
     WindowManagerInternal mWmInternal;
@@ -21364,5 +21368,21 @@ public class ActivityManagerService extends IActivityManager.Stub
         UUID errorId = mTraceErrorLogger.getOrCreateErrorId(anrId);
         mAnrWarningController.notifyAnrWarning(
                 uid, anrId, errorId, anrType, consumedTimeMs, timeoutMs, description);
+    }
+
+    // Three-finger gesture screenshot support
+    @Override
+    public boolean isThreeFingersSwipeActive() {
+        return mThreeFingersSwipeEnabled && mThreeFingerGestureActive;
+    }
+
+    @Override
+    public void setThreeFingersSwipeActive(boolean active) {
+        mThreeFingersSwipeEnabled = active;
+    }
+
+    @Override
+    public void setThreeGestureStateActive(boolean active) {
+        mThreeFingerGestureActive = active;
     }
 }

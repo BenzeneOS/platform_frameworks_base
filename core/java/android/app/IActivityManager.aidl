@@ -1069,4 +1069,9 @@ interface IActivityManager {
      * Unregisters the listener previously registered for ANR warning.
      */
     void unregisterAnrWarningListener(in IAnrWarningCallback callback);
+
+    // Three-finger gesture screenshot support
+    boolean isThreeFingersSwipeActive();
+    void setThreeFingersSwipeActive(boolean active);
+    void setThreeGestureStateActive(boolean active);
 }

@@ -7599,6 +7599,13 @@ public final class Settings {
         public static final String EDGE_LONG_SWIPE_ACTION = "edge_long_swipe_action";
 
         /**
+         * Whether three-finger swipe gesture takes a screenshot.
+         * 0 = disabled, 1 = enabled
+         * @hide
+         */
+        public static final String THREE_FINGER_SCREENSHOT = "three_finger_screenshot";
+
+        /**
          * Checks if the specified app can modify system settings. As of API
          * level 23, an app cannot modify system settings unless it declares the
          * {@link android.Manifest.permission#WRITE_SETTINGS}
