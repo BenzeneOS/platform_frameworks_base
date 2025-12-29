@@ -38,6 +38,13 @@ public final class GosPackageState implements Parcelable {
     @Nullable
     public final byte[] contactScopes;
     /**
+     * Spoofed battery level to report to this app.
+     * -1 means use real battery level (spoofing disabled).
+     * 0-100 means report this percentage.
+     * @hide
+     */
+    public final int spoofedBatteryLevel;
+    /**
      * These flags are lazily derived from persistent state. They are intentionally skipped from
      * equals() and hashCode(). derivedFlags are stored here for performance reasons, to avoid
      * performing separate IPC to fetch them.
@@ -63,15 +70,17 @@ public final class GosPackageState implements Parcelable {
 
     /** @hide */
     public GosPackageState(long flagStorage1, long packageFlagStorage,
-                           @Nullable byte[] storageScopes, @Nullable byte[] contactScopes) {
+                           @Nullable byte[] storageScopes, @Nullable byte[] contactScopes,
+                           int spoofedBatteryLevel) {
         this.flagStorage1 = flagStorage1;
         this.packageFlagStorage = packageFlagStorage;
         this.storageScopes = storageScopes;
         this.contactScopes = contactScopes;
+        this.spoofedBatteryLevel = spoofedBatteryLevel;
     }
 
     private static GosPackageState createEmpty() {
-        return new GosPackageState(0L, 0L, null, null);
+        return new GosPackageState(0L, 0L, null, null, -1);
     }
 
     private static final int TYPE_NONE = 0;
@@ -94,6 +103,7 @@ public final class GosPackageState implements Parcelable {
         dest.writeLong(this.packageFlagStorage);
         dest.writeByteArray(storageScopes);
         dest.writeByteArray(contactScopes);
+        dest.writeInt(spoofedBatteryLevel);
         dest.writeInt(derivedFlags);
     }
 
@@ -106,7 +116,7 @@ public final class GosPackageState implements Parcelable {
                 case TYPE_NONE: return NONE;
             };
             var res = new GosPackageState(in.readLong(), in.readLong(),
-                    in.createByteArray(), in.createByteArray());
+                    in.createByteArray(), in.createByteArray(), in.readInt());
             res.derivedFlags = in.readInt();
             return res;
         }
@@ -119,7 +129,7 @@ public final class GosPackageState implements Parcelable {
 
     @Override
     public int hashCode() {
-        return Long.hashCode(flagStorage1) + Arrays.hashCode(storageScopes) + Arrays.hashCode(contactScopes) + Long.hashCode(packageFlagStorage);
+        return Long.hashCode(flagStorage1) + Arrays.hashCode(storageScopes) + Arrays.hashCode(contactScopes) + Long.hashCode(packageFlagStorage) + spoofedBatteryLevel;
     }
 
     @Override
@@ -140,6 +150,9 @@ public final class GosPackageState implements Parcelable {
             return false;
         }
         if (packageFlagStorage != o.packageFlagStorage) {
+            return false;
+        }
+        if (spoofedBatteryLevel != o.spoofedBatteryLevel) {
             return false;
         }
         return true;
@@ -236,6 +249,7 @@ public final class GosPackageState implements Parcelable {
         private long packageFlagStorage;
         private byte[] storageScopes;
         private byte[] contactScopes;
+        private int spoofedBatteryLevel;
         private int editorFlags;
 
         /** @hide */
@@ -246,6 +260,7 @@ public final class GosPackageState implements Parcelable {
             this.packageFlagStorage = s.packageFlagStorage;
             this.storageScopes = s.storageScopes;
             this.contactScopes = s.contactScopes;
+            this.spoofedBatteryLevel = s.spoofedBatteryLevel;
         }
 
         @NonNull
@@ -304,6 +319,20 @@ public final class GosPackageState implements Parcelable {
             return this;
         }
 
+        /**
+         * Set the spoofed battery level.
+         * @param level -1 to disable spoofing (show real), 0-100 to report that percentage
+         * @throws IllegalArgumentException if level is not -1 or in range 0-100
+         */
+        @NonNull
+        public Editor setSpoofedBatteryLevel(int level) {
+            if (level < -1 || level > 100) {
+                throw new IllegalArgumentException("Battery level must be -1 (disabled) or 0-100");
+            }
+            this.spoofedBatteryLevel = level;
+            return this;
+        }
+
         @NonNull
         public Editor killUidAfterApply() {
             return setKillUidAfterApply(true);
@@ -334,7 +363,7 @@ public final class GosPackageState implements Parcelable {
         public boolean apply() {
             try {
                 return ActivityThread.getPackageManager().setGosPackageState(packageName, userId,
-                        new GosPackageState(flagStorage1, packageFlagStorage, storageScopes, contactScopes),
+                        new GosPackageState(flagStorage1, packageFlagStorage, storageScopes, contactScopes, spoofedBatteryLevel),
                         editorFlags);
             } catch (RemoteException e) {
                 throw e.rethrowFromSystemServer();

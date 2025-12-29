@@ -14273,6 +14273,14 @@ public final class Settings {
         @Protected(readWrite = KnownSystemPackage.SETTINGS)
         public static final String CLIPBOARD_AUTO_CLEAR_TIMEOUT = "clipboard_auto_clear_timeout";
 
+        /**
+         * Global battery spoof level for all apps. -1 means disabled (show real battery).
+         * 0-100 means spoof to that percentage. Per-app settings can override this.
+         * @hide
+         */
+        @Protected(readWrite = KnownSystemPackage.SETTINGS)
+        public static final String BATTERY_SPOOF_LEVEL = "battery_spoof_level";
+
         // ExtSettings END
 
         // NOTE: If you add new settings here, be sure to add them to
