@@ -223,6 +223,7 @@ public class BackAnimationController implements RemoteCallable<BackAnimationCont
     private int mPreviousNavigationType;
     private Runnable mPilferPointerCallback;
     private BackAnimation.TopUiRequest mRequestTopUiCallback;
+    private boolean mTriggerLongSwipe;
 
     private final IBackAnimationHandoffHandler mHandoffHandler =
             new IBackAnimationHandoffHandler.Stub() {
@@ -360,6 +361,16 @@ public class BackAnimationController implements RemoteCallable<BackAnimationCont
         @Override
         public void setTriggerBack(boolean triggerBack) {
             mShellExecutor.execute(() -> BackAnimationController.this.setTriggerBack(triggerBack));
+        }
+
+        @Override
+        public void setTriggerLongSwipe(boolean triggerLongSwipe) {
+            mShellExecutor.execute(() -> {
+                if (mPostCommitAnimationInProgress) {
+                    return;
+                }
+                mTriggerLongSwipe = triggerLongSwipe;
+            });
         }
 
         @Override
@@ -721,10 +732,13 @@ public class BackAnimationController implements RemoteCallable<BackAnimationCont
     @SuppressLint("MissingPermission")
     private void sendBackEvent(int action, int displayId) {
         final long when = SystemClock.uptimeMillis();
+        int flags = KeyEvent.FLAG_FROM_SYSTEM | KeyEvent.FLAG_VIRTUAL_HARD_KEY;
+        if (mTriggerLongSwipe) {
+            flags |= KeyEvent.FLAG_LONG_SWIPE;
+        }
         final KeyEvent ev = new KeyEvent(when, when, action, KeyEvent.KEYCODE_BACK, 0 /* repeat */,
                 0 /* metaState */, KeyCharacterMap.VIRTUAL_KEYBOARD, 0 /* scancode */,
-                KeyEvent.FLAG_FROM_SYSTEM | KeyEvent.FLAG_VIRTUAL_HARD_KEY,
-                InputDevice.SOURCE_KEYBOARD);
+                flags, InputDevice.SOURCE_KEYBOARD);
         if (ENABLE_INDEPENDENT_BACK_IN_PROJECTED.isTrue()) {
             ev.setDisplayId(displayId);
         }
@@ -732,6 +746,11 @@ public class BackAnimationController implements RemoteCallable<BackAnimationCont
         if (!mContext.getSystemService(InputManager.class)
                 .injectInputEvent(ev, InputManager.INJECT_INPUT_EVENT_MODE_ASYNC)) {
             ProtoLog.e(WM_SHELL_BACK_PREVIEW, "Inject input event fail");
+        }
+
+        // Reset long swipe flag after ACTION_UP
+        if (action == KeyEvent.ACTION_UP) {
+            mTriggerLongSwipe = false;
         }
     }
 
@@ -869,6 +888,10 @@ public class BackAnimationController implements RemoteCallable<BackAnimationCont
                 dispatchOnBackInvoked(callback);
             } else {
                 tryDispatchOnBackCancelled(callback);
+                if (mTriggerLongSwipe) {
+                    sendBackEvent(KeyEvent.ACTION_DOWN, mContext.getDisplay().getDisplayId());
+                    sendBackEvent(KeyEvent.ACTION_UP, mContext.getDisplay().getDisplayId());
+                }
             }
         }
         mRealCallbackInvoked = false;
@@ -885,6 +908,9 @@ public class BackAnimationController implements RemoteCallable<BackAnimationCont
             ProtoLog.d(WM_SHELL_BACK_PREVIEW,
                     "onGestureFinished called while no gesture is started");
             return;
+        }
+        if (mTriggerLongSwipe) {
+            mCurrentTracker.setTriggerBack(false);
         }
         boolean triggerBack = activeTouchTracker.getTriggerBack();
         ProtoLog.d(WM_SHELL_BACK_PREVIEW, "onGestureFinished() mTriggerBack == %s", triggerBack);
@@ -918,6 +944,9 @@ public class BackAnimationController implements RemoteCallable<BackAnimationCont
             mCurrentTracker.reset();
             if (triggerBack) {
                 injectBackKey(mBackAnimationAdapter.mOriginDisplayId);
+            } else if (mTriggerLongSwipe) {
+                sendBackEvent(KeyEvent.ACTION_DOWN, mContext.getDisplay().getDisplayId());
+                sendBackEvent(KeyEvent.ACTION_UP, mContext.getDisplay().getDisplayId());
             }
             finishBackNavigation(triggerBack);
             return;
@@ -1079,6 +1108,7 @@ public class BackAnimationController implements RemoteCallable<BackAnimationCont
             mBackNavigationInfo = null;
             requestTopUi(false, mPreviousNavigationType);
         }
+        mTriggerLongSwipe = false;
     }
 
     private void startLatencyTracking() {

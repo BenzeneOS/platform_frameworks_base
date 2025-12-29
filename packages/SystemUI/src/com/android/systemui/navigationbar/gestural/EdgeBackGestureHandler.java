@@ -43,6 +43,7 @@ import android.content.pm.PackageManager;
 import android.content.pm.PackageManager.NameNotFoundException;
 import android.content.res.Configuration;
 import android.content.res.Resources;
+import android.database.ContentObserver;
 import android.graphics.Insets;
 import android.graphics.PixelFormat;
 import android.graphics.Point;
@@ -282,6 +283,8 @@ public class EdgeBackGestureHandler {
     private boolean mIsEnabled;
     private boolean mIsNavBarShownTransiently;
     private boolean mIsBackGestureAllowed;
+    private boolean mIsLongSwipeEnabled;
+    private ContentObserver mLongSwipeObserver;
     private boolean mIsTrackpadThreeFingerSwipe;
     private boolean mIsButtonForcedVisible;
 
@@ -327,13 +330,15 @@ public class EdgeBackGestureHandler {
     private final NavigationEdgeBackPlugin.BackCallback mBackCallback =
             new NavigationEdgeBackPlugin.BackCallback() {
                 @Override
-                public void triggerBack() {
+                public void triggerBack(boolean isLongPress) {
                     // Notify FalsingManager that an intentional gesture has occurred.
                     mFalsingManager.isFalseTouch(BACK_GESTURE);
                     // Only inject back keycodes when ahead-of-time back dispatching is disabled.
                     if (mBackAnimation == null) {
-                        boolean sendDown = sendEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_BACK);
-                        boolean sendUp = sendEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_BACK);
+                        boolean sendDown = sendEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_BACK,
+                                isLongPress ? KeyEvent.FLAG_LONG_SWIPE : 0);
+                        boolean sendUp = sendEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_BACK,
+                                isLongPress ? KeyEvent.FLAG_LONG_SWIPE : 0);
                         if (DEBUG_MISSING_GESTURE) {
                             Log.d(DEBUG_MISSING_GESTURE_TAG, "Triggered back: down="
                                     + sendDown + ", up=" + sendUp);
@@ -364,6 +369,13 @@ public class EdgeBackGestureHandler {
                 public void setTriggerBack(boolean triggerBack) {
                     if (mBackAnimation != null) {
                         mBackAnimation.setTriggerBack(triggerBack);
+                    }
+                }
+
+                @Override
+                public void setTriggerLongSwipe(boolean triggerLongSwipe) {
+                    if (mBackAnimation != null) {
+                        mBackAnimation.setTriggerLongSwipe(triggerLongSwipe);
                     }
                 }
             };
@@ -647,6 +659,27 @@ public class EdgeBackGestureHandler {
         }
         updateIsEnabled();
         mUserTracker.addCallback(mUserChangedCallback, mUiThreadContext.getExecutor());
+
+        // Register edge long swipe setting observer
+        mLongSwipeObserver = new ContentObserver(mUiThreadContext.getHandler()) {
+            @Override
+            public void onChange(boolean selfChange) {
+                mIsLongSwipeEnabled = android.provider.Settings.System.getInt(
+                        mContext.getContentResolver(),
+                        android.provider.Settings.System.EDGE_LONG_SWIPE_ACTION,
+                        0) != 0;
+                updateLongSwipeWidth();
+            }
+        };
+        mContext.getContentResolver().registerContentObserver(
+                android.provider.Settings.System.getUriFor(
+                        android.provider.Settings.System.EDGE_LONG_SWIPE_ACTION),
+                false, mLongSwipeObserver);
+        // Initialize the setting
+        mIsLongSwipeEnabled = android.provider.Settings.System.getInt(
+                mContext.getContentResolver(),
+                android.provider.Settings.System.EDGE_LONG_SWIPE_ACTION,
+                0) != 0;
     }
 
     /**
@@ -660,6 +693,9 @@ public class EdgeBackGestureHandler {
         mTrackpadsConnected.clear();
         updateIsEnabled();
         mUserTracker.removeCallback(mUserChangedCallback);
+        if (mLongSwipeObserver != null) {
+            mContext.getContentResolver().unregisterContentObserver(mLongSwipeObserver);
+        }
     }
 
     /**
@@ -883,6 +919,7 @@ public class EdgeBackGestureHandler {
             mEdgeBackPlugin.setBackCallback(mBackCallback);
             mEdgeBackPlugin.setLayoutParams(createLayoutParams());
             updateDisplaySize();
+            updateLongSwipeWidth();
         } finally {
             Trace.endSection();
         }
@@ -894,6 +931,12 @@ public class EdgeBackGestureHandler {
 
     public boolean isButtonForcedVisible() {
         return mIsButtonForcedVisible;
+    }
+
+    private void updateLongSwipeWidth() {
+        if (mIsEnabled && mEdgeBackPlugin != null) {
+            mEdgeBackPlugin.setLongSwipeEnabled(mIsLongSwipeEnabled);
+        }
     }
 
     /**
@@ -1420,6 +1463,7 @@ public class EdgeBackGestureHandler {
             mEdgeBackPlugin.setDisplaySize(mDisplaySize);
         }
         updateBackAnimationThresholds();
+        updateLongSwipeWidth();
     }
 
     private void updateBackAnimationThresholds() {
@@ -1434,10 +1478,14 @@ public class EdgeBackGestureHandler {
     }
 
     private boolean sendEvent(int action, int code) {
+        return sendEvent(action, code, 0);
+    }
+
+    private boolean sendEvent(int action, int code, int flags) {
         long when = SystemClock.uptimeMillis();
         final KeyEvent ev = new KeyEvent(when, when, action, code, 0 /* repeat */,
                 0 /* metaState */, KeyCharacterMap.VIRTUAL_KEYBOARD, 0 /* scancode */,
-                KeyEvent.FLAG_FROM_SYSTEM | KeyEvent.FLAG_VIRTUAL_HARD_KEY,
+                KeyEvent.FLAG_FROM_SYSTEM | KeyEvent.FLAG_VIRTUAL_HARD_KEY | flags,
                 InputDevice.SOURCE_KEYBOARD);
 
         ev.setDisplayId(mContext.getDisplay().getDisplayId());

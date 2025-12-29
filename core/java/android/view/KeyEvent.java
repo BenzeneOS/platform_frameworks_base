@@ -2160,6 +2160,13 @@ public class KeyEvent extends InputEvent implements Parcelable {
     public static final int FLAG_IS_ACCESSIBILITY_EVENT = INPUT_EVENT_FLAG_IS_ACCESSIBILITY_EVENT;
 
     /**
+     * Flag that indicates that event was sent from EdgeBackGestureHandler
+     * as a long swipe gesture.
+     * @hide
+     */
+    public static final int FLAG_LONG_SWIPE = 0x1000;
+
+    /**
      * Signifies that the key is being predispatched.
      * @hide
      */

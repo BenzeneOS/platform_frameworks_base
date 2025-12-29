@@ -302,5 +302,6 @@ public class SystemSettingsValidators {
         VALIDATORS.put(System.TORCH_LONG_PRESS_POWER_TIMEOUT,
                 new InclusiveIntegerRangeValidator(0, 600));
         VALIDATORS.put(System.VOLBTN_MUSIC_CONTROLS, BOOLEAN_VALIDATOR);
+        VALIDATORS.put(System.EDGE_LONG_SWIPE_ACTION, new InclusiveIntegerRangeValidator(0, 12));
     }
 }

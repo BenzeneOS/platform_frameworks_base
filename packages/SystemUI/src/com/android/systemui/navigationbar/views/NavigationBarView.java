@@ -41,6 +41,7 @@ import android.graphics.Point;
 import android.graphics.Rect;
 import android.os.Bundle;
 import android.os.RemoteException;
+import android.provider.Settings;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.util.SparseArray;
@@ -632,7 +633,7 @@ public class NavigationBarView extends FrameLayout {
         // Always disable recents when alternate car mode UI is active and for secondary displays.
         boolean disableRecent = isRecentsButtonDisabled();
 
-        // Disable the home handle if both hone and recents are disabled
+        // Disable the home handle if both home and recents are disabled.
         boolean disableHomeHandle = disableRecent
                 && ((mDisabledFlags & View.STATUS_BAR_DISABLE_HOME) != 0);
 
