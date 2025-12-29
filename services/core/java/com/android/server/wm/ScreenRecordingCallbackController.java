@@ -20,6 +20,7 @@ import static android.content.Context.MEDIA_PROJECTION_SERVICE;
 
 import static com.android.internal.protolog.WmProtoLogGroups.WM_ERROR;
 
+import android.content.pm.PackageManager;
 import android.media.projection.IMediaProjectionManager;
 import android.media.projection.IMediaProjectionWatcherCallback;
 import android.media.projection.MediaProjectionEvent;
@@ -142,6 +143,11 @@ public class ScreenRecordingCallbackController {
             IBinder binder = callback.asBinder();
             int uid = Binder.getCallingUid();
 
+            // If hiding screen capture status, return false and don't register
+            if (shouldHideScreenCaptureStatusForUid(uid)) {
+                return false;
+            }
+
             if (mCallbacks.containsKey(binder)) {
                 return mLastInvokedStateByUid.get(uid);
             }
@@ -198,6 +204,11 @@ public class ScreenRecordingCallbackController {
 
     @GuardedBy("WindowManagerService.mGlobalLock")
     void onProcessActivityVisibilityChanged(int uid, boolean processVisible) {
+        // Skip if hiding screen capture status from this UID
+        if (shouldHideScreenCaptureStatusForUid(uid)) {
+            return;
+        }
+
         // If recording isn't active or there's no registered callback for the uid, there's nothing
         // to do on this visibility change.
         if (mRecordedWC == null || !mLastInvokedStateByUid.containsKey(uid)) {
@@ -285,6 +296,28 @@ public class ScreenRecordingCallbackController {
                 }
             }
         });
+    }
+
+    private boolean shouldHideScreenCaptureStatusForUid(int uid) {
+        // Global check
+        if (mWms.getHideScreenCaptureStatus()) {
+            return true;
+        }
+
+        // Per-app check - get package name from UID
+        PackageManager pm = mWms.mContext.getPackageManager();
+        String[] packages = pm.getPackagesForUid(uid);
+        if (packages == null || packages.length == 0) {
+            return false;
+        }
+
+        // Check any package for the UID using shared utility
+        for (String packageName : packages) {
+            if (mWms.checkHideScreenCaptureStatusAppOp(packageName, uid)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     void dump(PrintWriter pw) {

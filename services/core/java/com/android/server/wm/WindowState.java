@@ -1872,7 +1872,13 @@ class WindowState extends WindowContainer<WindowState> implements WindowManagerP
     }
 
     boolean isSecureLocked() {
+        // Global bypass
         if (mWmService.getDisableSecureWindows()) {
+            return false;
+        }
+
+        // Per-app bypass via AppOps
+        if (shouldBypassFlagSecureForApp()) {
             return false;
         }
 
@@ -1887,6 +1893,26 @@ class WindowState extends WindowContainer<WindowState> implements WindowManagerP
         }
 
         return !DevicePolicyCache.getInstance().isScreenCaptureAllowed(mShowUserId);
+    }
+
+    private boolean shouldBypassFlagSecureForApp() {
+        String packageName = getOwningPackage();
+        if (packageName == null) {
+            return false;
+        }
+
+        AppOpsManager appOps = mWmService.mContext.getSystemService(AppOpsManager.class);
+        if (appOps == null) {
+            return false;
+        }
+
+        try {
+            return appOps.checkOpNoThrow(AppOpsManager.OP_BYPASS_FLAG_SECURE,
+                    getOwningUid(), packageName) == AppOpsManager.MODE_ALLOWED;
+        } catch (SecurityException e) {
+            // Package may not belong to the owning uid (e.g., splash screen created by shell)
+            return false;
+        }
     }
 
     /**

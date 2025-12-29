@@ -835,6 +835,8 @@ public class WindowManagerService extends IWindowManager.Stub
                 Settings.Secure.getUriFor(Settings.Secure.IMMERSIVE_MODE_CONFIRMATIONS);
         private final Uri mDisableSecureWindowsUri =
                 Settings.Secure.getUriFor(Settings.Secure.DISABLE_SECURE_WINDOWS);
+        private final Uri mHideScreenCaptureStatusUri =
+                Settings.Secure.getUriFor(Settings.Secure.HIDE_SCREEN_CAPTURE_STATUS);
         private final Uri mMagnifyImeEnabledUri = Settings.Secure.getUriFor(
                 Settings.Secure.ACCESSIBILITY_MAGNIFICATION_MAGNIFY_NAV_AND_IME);
         private final Uri mPolicyControlUri =
@@ -868,6 +870,8 @@ public class WindowManagerService extends IWindowManager.Stub
             resolver.registerContentObserver(mImmersiveModeConfirmationsUri, false, this,
                     UserHandle.USER_ALL);
             resolver.registerContentObserver(mDisableSecureWindowsUri, false, this,
+                    UserHandle.USER_ALL);
+            resolver.registerContentObserver(mHideScreenCaptureStatusUri, false, this,
                     UserHandle.USER_ALL);
             if (com.android.server.accessibility.Flags.enableMagnificationMagnifyNavBarAndIme()) {
                 resolver.registerContentObserver(mMagnifyImeEnabledUri, false, this,
@@ -931,6 +935,11 @@ public class WindowManagerService extends IWindowManager.Stub
 
             if (mDisableSecureWindowsUri.equals(uri)) {
                 updateDisableSecureWindows();
+                return;
+            }
+
+            if (mHideScreenCaptureStatusUri.equals(uri)) {
+                updateHideScreenCaptureStatus();
                 return;
             }
 
@@ -1055,13 +1064,10 @@ public class WindowManagerService extends IWindowManager.Stub
                 return;
             }
 
-            boolean disableSecureWindows;
-            try {
-                disableSecureWindows = Settings.Secure.getIntForUser(mContext.getContentResolver(),
-                        Settings.Secure.DISABLE_SECURE_WINDOWS, 0) != 0;
-            } catch (Settings.SettingNotFoundException e) {
-                disableSecureWindows = false;
-            }
+            boolean disableSecureWindows = Settings.Secure.getIntForUser(
+                    mContext.getContentResolver(),
+                    Settings.Secure.DISABLE_SECURE_WINDOWS, 0,
+                    UserHandle.USER_CURRENT) != 0;
             if (mDisableSecureWindows == disableSecureWindows) {
                 return;
             }
@@ -1069,6 +1075,17 @@ public class WindowManagerService extends IWindowManager.Stub
             synchronized (mGlobalLock) {
                 mDisableSecureWindows = disableSecureWindows;
                 mRoot.refreshSecureSurfaceState();
+            }
+        }
+
+        void updateHideScreenCaptureStatus() {
+            boolean hideScreenCaptureStatus = Settings.Secure.getIntForUser(
+                    mContext.getContentResolver(),
+                    Settings.Secure.HIDE_SCREEN_CAPTURE_STATUS, 0,
+                    UserHandle.USER_CURRENT) != 0;
+
+            synchronized (mGlobalLock) {
+                mHideScreenCaptureStatus = hideScreenCaptureStatus;
             }
         }
 
@@ -1247,6 +1264,7 @@ public class WindowManagerService extends IWindowManager.Stub
     private final ScreenRecordingCallbackController mScreenRecordingCallbackController;
 
     private volatile boolean mDisableSecureWindows = false;
+    private volatile boolean mHideScreenCaptureStatus = false;
 
     /** Creates an instance of the WindowManagerService for the system server. */
     public static WindowManagerService main(@NonNull final Context context,
@@ -1485,6 +1503,17 @@ public class WindowManagerService extends IWindowManager.Stub
         mLatencyTracker = LatencyTracker.getInstance(context);
 
         mSettingsObserver = new SettingsObserver();
+
+        // Watch for per-app FLAG_SECURE bypass changes to refresh secure surface state
+        AppOpsManager appOps = mContext.getSystemService(AppOpsManager.class);
+        if (appOps != null) {
+            appOps.startWatchingMode(AppOpsManager.OP_BYPASS_FLAG_SECURE, null,
+                    (op, packageName) -> {
+                        synchronized (mGlobalLock) {
+                            mRoot.refreshSecureSurfaceState();
+                        }
+                    });
+        }
 
         mSurfaceAnimationRunner = new SurfaceAnimationRunner(mTransactionFactory,
                 mPowerManagerInternal);
@@ -10770,13 +10799,39 @@ public class WindowManagerService extends IWindowManager.Stub
                     (ar) -> {
                         if (!notifiedApps.contains(ar.mActivityComponent) && ar.isVisible()
                                 && ar.isRegisteredForScreenCaptureCallback()) {
-                            ar.reportScreenCaptured();
-                            notifiedApps.add(ar.mActivityComponent);
+                            // Check if we should hide screen capture status from this app
+                            if (!shouldHideScreenCaptureStatusForApp(ar.packageName, ar.getUid())) {
+                                ar.reportScreenCaptured();
+                                notifiedApps.add(ar.mActivityComponent);
+                            }
                         }
                     },
                     true /* traverseTopToBottom */);
             return List.copyOf(notifiedApps);
         }
+    }
+
+    private boolean shouldHideScreenCaptureStatusForApp(String packageName, int uid) {
+        // Global check
+        if (mHideScreenCaptureStatus) {
+            return true;
+        }
+
+        return checkHideScreenCaptureStatusAppOp(packageName, uid);
+    }
+
+    /**
+     * Check if the OP_HIDE_SCREEN_CAPTURE_STATUS AppOp is allowed for the given package/uid.
+     * Package-private for use by ScreenRecordingCallbackController.
+     */
+    boolean checkHideScreenCaptureStatusAppOp(String packageName, int uid) {
+        AppOpsManager appOps = mContext.getSystemService(AppOpsManager.class);
+        if (appOps == null) {
+            return false;
+        }
+
+        return appOps.checkOpNoThrow(AppOpsManager.OP_HIDE_SCREEN_CAPTURE_STATUS,
+                uid, packageName) == AppOpsManager.MODE_ALLOWED;
     }
 
     /**
@@ -10890,6 +10945,10 @@ public class WindowManagerService extends IWindowManager.Stub
 
     boolean getDisableSecureWindows() {
         return mDisableSecureWindows;
+    }
+
+    boolean getHideScreenCaptureStatus() {
+        return mHideScreenCaptureStatus;
     }
 
     /**
