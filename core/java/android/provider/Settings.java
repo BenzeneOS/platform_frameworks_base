@@ -7432,6 +7432,10 @@ public final class Settings {
         public static final String SCRAMBLE_SIM_PIN_LAYOUT = "scramble_sim_pin_layout";
 
         /** @hide */
+        @Protected(read = KnownSystemPackage.SYSTEM_UI, readWrite = KnownSystemPackage.SETTINGS)
+        public static final String REQUIRE_UNLOCK_FOR_POWER_MENU = "require_unlock_for_power_menu";
+
+        /** @hide */
         @Protected(readWrite = KnownSystemPackage.SETTINGS)
         public static final String CROSS_PROFILE_CLIPBOARD_ACCESS = "cross_profile_clipboard_access";
 
