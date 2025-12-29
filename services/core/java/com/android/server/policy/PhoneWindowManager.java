@@ -592,6 +592,11 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     // Edge long swipe action
     int mEdgeLongSwipeAction;
 
+    // Three-finger screenshot gesture
+    private ThreeFingersSwipeListener mThreeFingersSwipe;
+    private boolean mThreeFingerScreenshotEnabled;
+    private com.android.internal.util.ScreenshotHelper mThreeFingerScreenshotHelper;
+
     volatile boolean mPowerButtonLaunchGestureTriggered;
     volatile boolean mPowerButtonLaunchGestureTriggeredDuringGoingToSleep;
 
@@ -997,6 +1002,9 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                     false, this, UserHandle.USER_ALL);
             resolver.registerContentObserver(
                     Settings.System.getUriFor(Settings.System.EDGE_LONG_SWIPE_ACTION),
+                    false, this, UserHandle.USER_ALL);
+            resolver.registerContentObserver(
+                    Settings.System.getUriFor(Settings.System.THREE_FINGER_SCREENSHOT),
                     false, this, UserHandle.USER_ALL);
             updateSettings();
         }
@@ -3123,6 +3131,28 @@ public class PhoneWindowManager implements WindowManagerPolicy {
             // Custom settings - Edge long swipe action
             mEdgeLongSwipeAction = Settings.System.getIntForUser(resolver,
                     Settings.System.EDGE_LONG_SWIPE_ACTION, 0, UserHandle.USER_CURRENT);
+
+            // Custom settings - Three-finger screenshot gesture
+            boolean threeFingerScreenshotEnabled = Settings.System.getIntForUser(resolver,
+                    Settings.System.THREE_FINGER_SCREENSHOT, 0, UserHandle.USER_CURRENT) == 1;
+            if (mThreeFingerScreenshotEnabled != threeFingerScreenshotEnabled) {
+                mThreeFingerScreenshotEnabled = threeFingerScreenshotEnabled;
+                if (mThreeFingersSwipe != null) {
+                    if (mThreeFingerScreenshotEnabled) {
+                        mWindowManagerFuncs.registerPointerEventListener(
+                                mThreeFingersSwipe, DEFAULT_DISPLAY);
+                    } else {
+                        mWindowManagerFuncs.unregisterPointerEventListener(
+                                mThreeFingersSwipe, DEFAULT_DISPLAY);
+                    }
+                }
+                try {
+                    ActivityManager.getService().setThreeFingersSwipeActive(
+                            mThreeFingerScreenshotEnabled);
+                } catch (RemoteException e) {
+                    // Do nothing
+                }
+            }
 
             // Configure wake gesture.
             boolean wakeGestureEnabledSetting = Settings.Secure.getIntForUser(resolver,
@@ -6468,6 +6498,35 @@ public class PhoneWindowManager implements WindowManagerPolicy {
 
         mAutofillManagerInternal = LocalServices.getService(AutofillManagerInternal.class);
         mGestureLauncherService = LocalServices.getService(GestureLauncherService.class);
+
+        // Initialize three-finger screenshot gesture listener
+        mThreeFingerScreenshotHelper = new com.android.internal.util.ScreenshotHelper(mContext);
+        mThreeFingersSwipe = new ThreeFingersSwipeListener(mContext,
+                new ThreeFingersSwipeListener.Callbacks() {
+            @Override
+            public void onSwipeThreeFingers() {
+                mHandler.post(() -> {
+                    mThreeFingerScreenshotHelper.takeScreenshot(
+                            android.view.WindowManager.ScreenshotSource.SCREENSHOT_VENDOR_GESTURE,
+                            mHandler, null);
+                    performHapticFeedback(HapticFeedbackConstants.LONG_PRESS,
+                            "Three Fingers Screenshot");
+                });
+            }
+        });
+
+        // Register if enabled - read setting directly since updateSettings may not have run yet
+        mThreeFingerScreenshotEnabled = Settings.System.getIntForUser(
+                mContext.getContentResolver(),
+                Settings.System.THREE_FINGER_SCREENSHOT, 0, UserHandle.USER_CURRENT) == 1;
+        if (mThreeFingerScreenshotEnabled) {
+            mWindowManagerFuncs.registerPointerEventListener(mThreeFingersSwipe, DEFAULT_DISPLAY);
+            try {
+                ActivityManager.getService().setThreeFingersSwipeActive(true);
+            } catch (RemoteException e) {
+                // Do nothing
+            }
+        }
     }
 
     /** {@inheritDoc} */

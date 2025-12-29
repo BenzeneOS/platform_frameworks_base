@@ -8011,6 +8011,12 @@ public final class ViewRootImpl implements ViewParent,
         private int processPointerEvent(QueuedInputEvent q) {
             final MotionEvent event = (MotionEvent)q.mEvent;
 
+            // Cancel touch events when three-finger screenshot gesture is being detected
+            if (event.getPointerCount() == 3 && isThreeFingersSwipeActive()) {
+                event.setAction(MotionEvent.ACTION_CANCEL);
+                Log.d(mTag, "canceling motionEvent because of threeGesture detecting");
+            }
+
             // Translate the pointer event for compatibility, if needed.
             if (mTranslator != null) {
                 mTranslator.translateEventInScreenToAppWindow(event);
@@ -13823,5 +13829,25 @@ public final class ViewRootImpl implements ViewParent,
      */
     public Choreographer getChoreographer() {
         return mChoreographer;
+    }
+
+    // Cache for three-finger swipe state to avoid binder calls on every motion event
+    private boolean mThreeFingersSwipeCached = false;
+    private long mThreeFingersSwipeCacheTime = 0;
+    private static final long THREE_FINGERS_CACHE_DURATION_MS = 16; // One frame
+
+    private boolean isThreeFingersSwipeActive() {
+        final long now = android.os.SystemClock.uptimeMillis();
+        if (now - mThreeFingersSwipeCacheTime < THREE_FINGERS_CACHE_DURATION_MS) {
+            return mThreeFingersSwipeCached;
+        }
+        try {
+            mThreeFingersSwipeCached = ActivityManager.getService().isThreeFingersSwipeActive();
+            mThreeFingersSwipeCacheTime = now;
+            return mThreeFingersSwipeCached;
+        } catch (RemoteException e) {
+            Log.e(mTag, "isThreeFingersSwipeActive exception", e);
+            return false;
+        }
     }
 }

@@ -19,7 +19,10 @@ filegroup {
 
 filegroup {
     name: "services.core-sources",
-    srcs: ["java/**/*.java"],
+    srcs: [
+        "java/**/*.java",
+        "java/**/*.kt",
+    ],
     exclude_srcs: [
         ":services.core-sources-am-wm",
     ],
@@ -170,6 +173,7 @@ java_library_static {
         "error_prone_annotations",
         "framework-tethering.stubs.module_lib",
         "keepanno-annotations",
+        "kotlin-annotations",
         "monet",
         "power_hint_flags_lib",
         "service-art.stubs.system_server",

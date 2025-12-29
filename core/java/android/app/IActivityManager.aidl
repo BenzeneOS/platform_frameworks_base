@@ -1061,4 +1061,9 @@ interface IActivityManager {
      */
     oneway void reportOptimizationInfo(in IBinder app, in String compilerFilter,
             in String compilationReason);
+
+    // Three-finger gesture screenshot support
+    boolean isThreeFingersSwipeActive();
+    void setThreeFingersSwipeActive(boolean active);
+    void setThreeGestureStateActive(boolean active);
 }

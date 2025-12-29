@@ -377,6 +377,8 @@ java_library {
         "android.hidl.manager-V1.0-java",
         "framework-tethering.stubs.module_lib",
         "keepanno-annotations",
+        "kotlin-annotations",
+        "kotlin-stdlib",
         "service-art.stubs.system_server",
         "service-permission.stubs.system_server",
         "service-rkp.stubs.system_server",

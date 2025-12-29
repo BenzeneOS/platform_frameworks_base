@@ -303,5 +303,6 @@ public class SystemSettingsValidators {
                 new InclusiveIntegerRangeValidator(0, 600));
         VALIDATORS.put(System.VOLBTN_MUSIC_CONTROLS, BOOLEAN_VALIDATOR);
         VALIDATORS.put(System.EDGE_LONG_SWIPE_ACTION, new InclusiveIntegerRangeValidator(0, 12));
+        VALIDATORS.put(System.THREE_FINGER_SCREENSHOT, BOOLEAN_VALIDATOR);
     }
 }

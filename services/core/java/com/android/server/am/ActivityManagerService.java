@@ -1483,6 +1483,10 @@ public class ActivityManagerService extends IActivityManager.Stub
     @GuardedBy("this")
     boolean mDeterministicUidIdle = false;
 
+    // Three-finger gesture screenshot support
+    private volatile boolean mThreeFingersSwipeEnabled = false;
+    private volatile boolean mThreeFingerGestureActive = false;
+
     @VisibleForTesting
     public WindowManagerService mWindowManager;
     WindowManagerInternal mWmInternal;
@@ -20075,5 +20079,21 @@ public class ActivityManagerService extends IActivityManager.Stub
             return;
         }
         r.getWindowProcessController().setOptimizationInfo(compilerFilter, compilationReason);
+    }
+
+    // Three-finger gesture screenshot support
+    @Override
+    public boolean isThreeFingersSwipeActive() {
+        return mThreeFingersSwipeEnabled && mThreeFingerGestureActive;
+    }
+
+    @Override
+    public void setThreeFingersSwipeActive(boolean active) {
+        mThreeFingersSwipeEnabled = active;
+    }
+
+    @Override
+    public void setThreeGestureStateActive(boolean active) {
+        mThreeFingerGestureActive = active;
     }
 }
