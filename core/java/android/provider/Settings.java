@@ -7662,6 +7662,20 @@ public final class Settings {
         @Protected(read = KnownSystemPackage.SYSTEM_UI, readWrite = KnownSystemPackage.SETTINGS)
         public static final String REQUIRE_UNLOCK_FOR_POWER_MENU = "require_unlock_for_power_menu";
 
+        /**
+         * Comma-separated list of package names to hide from other apps.
+         * @hide
+         */
+        @Protected(readWrite = KnownSystemPackage.SETTINGS)
+        public static final String HIDE_APPLIST = "hide_applist";
+
+        /**
+         * Comma-separated list of package names that are allowed to see all apps.
+         * @hide
+         */
+        @Protected(readWrite = KnownSystemPackage.SETTINGS)
+        public static final String HIDE_APPLIST_WHITELIST = "hide_applist_whitelist";
+
         /** @hide */
         @Protected(readWrite = KnownSystemPackage.SETTINGS)
         public static final String CROSS_PROFILE_CLIPBOARD_ACCESS = "cross_profile_clipboard_access";

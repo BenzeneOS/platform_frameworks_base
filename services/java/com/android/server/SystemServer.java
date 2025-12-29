@@ -2877,6 +2877,10 @@ public final class SystemServer implements Dumpable {
             mSystemServiceManager.startService(LauncherAppsService.class);
             t.traceEnd();
 
+            t.traceBegin("StartHideAppListService");
+            mSystemServiceManager.startService(HideAppListService.class);
+            t.traceEnd();
+
             t.traceBegin("StartCrossProfileAppsService");
             mSystemServiceManager.startService(CrossProfileAppsService.class);
             t.traceEnd();
