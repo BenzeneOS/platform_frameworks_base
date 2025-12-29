@@ -7302,6 +7302,7 @@ public final class Settings {
 
         /**
          * Whether network traffic indicator is enabled.
+         * 0 = disabled, 1 = enabled
          * @hide
          */
         public static final String NETWORK_TRAFFIC_ENABLED = "network_traffic_enabled";
@@ -7315,6 +7316,7 @@ public final class Settings {
 
         /**
          * Whether to auto-hide network traffic indicator when inactive.
+         * 0 = disabled, 1 = enabled
          * @hide
          */
         public static final String NETWORK_TRAFFIC_AUTOHIDE = "network_traffic_autohide";
@@ -7326,7 +7328,8 @@ public final class Settings {
         public static final String NETWORK_TRAFFIC_AUTOHIDE_THRESHOLD = "network_traffic_autohide_threshold";
 
         /**
-         * Network traffic display units. 0 = auto, 1 = KB/s, 2 = MB/s
+         * Network traffic display units.
+         * 0 = auto, 1 = KB/s, 2 = MB/s
          * @hide
          */
         public static final String NETWORK_TRAFFIC_UNITS = "network_traffic_units";
@@ -7339,6 +7342,7 @@ public final class Settings {
 
         /**
          * Whether to hide the network traffic arrow indicator.
+         * 0 = show arrows, 1 = hide arrows
          * @hide
          */
         public static final String NETWORK_TRAFFIC_HIDEARROW = "network_traffic_hidearrow";
@@ -7359,6 +7363,7 @@ public final class Settings {
 
         /**
          * Whether to show carrier name on lockscreen.
+         * 0 = hide, 1 = show (default)
          * @hide
          */
         public static final String CARRIER_ON_LOCKSCREEN = "carrier_on_lockscreen";
@@ -7432,7 +7437,15 @@ public final class Settings {
         public static final String EDGE_LONG_SWIPE_ACTION = "edge_long_swipe_action";
 
         /**
-         * Three finger screenshot gesture.
+         * Heads-up notification timeout in seconds.
+         * Default: 5 seconds
+         * @hide
+         */
+        public static final String HEADS_UP_TIMEOUT = "heads_up_timeout";
+
+        /**
+         * Whether three-finger swipe gesture takes a screenshot.
+         * 0 = disabled, 1 = enabled
          * @hide
          */
         public static final String THREE_FINGER_SCREENSHOT = "three_finger_screenshot";
@@ -7442,12 +7455,6 @@ public final class Settings {
          * @hide
          */
         public static final String WIFI_STANDARD_ICON = "wifi_standard_icon";
-
-        /**
-         * Heads-up notification timeout in seconds.
-         * @hide
-         */
-        public static final String HEADS_UP_TIMEOUT = "heads_up_timeout";
 
         /**
          * Checks if the specified app can modify system settings. As of API
@@ -14326,28 +14333,186 @@ public final class Settings {
         @Protected(readWrite = KnownSystemPackage.SETTINGS)
         public static final String BATTERY_SPOOF_LEVEL = "battery_spoof_level";
 
-        // Battery saver customization options
-        /** @hide */ public static final String BATTERY_SAVER_ALLOW_ANIMATION = "battery_saver_allow_animation";
-        /** @hide */ public static final String BATTERY_SAVER_REFRESH_RATE_CAP = "battery_saver_refresh_rate_cap";
-        /** @hide */ public static final String BATTERY_SAVER_ALLOW_BLUR = "battery_saver_allow_blur";
-        /** @hide */ public static final String BATTERY_SAVER_ALLOW_HBM = "battery_saver_allow_hbm";
-        /** @hide */ public static final String BATTERY_SAVER_ALLOW_AOD = "battery_saver_allow_aod";
-        /** @hide */ public static final String BATTERY_SAVER_ALLOW_NIGHT_MODE_OFF = "battery_saver_allow_night_mode_off";
-        /** @hide */ public static final String BATTERY_SAVER_ALLOW_BRIGHTNESS = "battery_saver_allow_brightness";
-        /** @hide */ public static final String BATTERY_SAVER_ALLOW_LAUNCH_BOOST = "battery_saver_allow_launch_boost";
-        /** @hide */ public static final String BATTERY_SAVER_ALLOW_STANDBY = "battery_saver_allow_standby";
-        /** @hide */ public static final String BATTERY_SAVER_ALLOW_BACKGROUND = "battery_saver_allow_background";
-        /** @hide */ public static final String BATTERY_SAVER_DISABLE_QUICK_DOZE = "battery_saver_disable_quick_doze";
-        /** @hide */ public static final String BATTERY_SAVER_ALLOW_NETWORK = "battery_saver_allow_network";
-        /** @hide */ public static final String BATTERY_SAVER_ALLOW_DATA = "battery_saver_allow_data";
-        /** @hide */ public static final String BATTERY_SAVER_ALLOW_VIBRATION = "battery_saver_allow_vibration";
-        /** @hide */ public static final String BATTERY_SAVER_ALLOW_SOUNDTRIGGER = "battery_saver_allow_soundtrigger";
-        /** @hide */ public static final String BATTERY_SAVER_ALLOW_SENSORS = "battery_saver_allow_sensors";
-        /** @hide */ public static final String BATTERY_SAVER_ALLOW_ATTENTION = "battery_saver_allow_attention";
-        /** @hide */ public static final String BATTERY_SAVER_ALLOW_CAMERA_ROTATE = "battery_saver_allow_camera_rotate";
-        /** @hide */ public static final String BATTERY_SAVER_ALLOW_FULL_BACKUP = "battery_saver_allow_full_backup";
-        /** @hide */ public static final String BATTERY_SAVER_ALLOW_KV_BACKUP = "battery_saver_allow_kv_backup";
-        /** @hide */ public static final String BATTERY_SAVER_ALLOW_LOCATION = "battery_saver_allow_location";
+        // Battery Saver Options: Display
+
+        /**
+         * Whether to allow animations when Battery Saver is on.
+         * 0 = disabled (use system default), 1 = allow animations
+         * @hide
+         */
+        @Protected(readWrite = KnownSystemPackage.SETTINGS)
+        public static final String BATTERY_SAVER_ALLOW_ANIMATION = "battery_saver_allow_animation";
+
+        /**
+         * Refresh rate cap when Battery Saver is on.
+         * Value is the Hz cap (e.g., 60, 90, 120). 0 = no limit.
+         * Default: 60
+         * @hide
+         */
+        @Protected(readWrite = KnownSystemPackage.SETTINGS)
+        public static final String BATTERY_SAVER_REFRESH_RATE_CAP = "battery_saver_refresh_rate_cap";
+
+        /**
+         * Whether to allow window blur when Battery Saver is on.
+         * 0 = disabled (use system default), 1 = allow blur
+         * @hide
+         */
+        @Protected(readWrite = KnownSystemPackage.SETTINGS)
+        public static final String BATTERY_SAVER_ALLOW_BLUR = "battery_saver_allow_blur";
+
+        /**
+         * Whether to allow high brightness mode when Battery Saver is on.
+         * 0 = disabled (use system default), 1 = allow HBM
+         * @hide
+         */
+        @Protected(readWrite = KnownSystemPackage.SETTINGS)
+        public static final String BATTERY_SAVER_ALLOW_HBM = "battery_saver_allow_hbm";
+
+        /**
+         * Whether to allow Always-On Display when Battery Saver is on.
+         * 0 = disabled (use system default), 1 = allow AOD
+         * @hide
+         */
+        @Protected(readWrite = KnownSystemPackage.SETTINGS)
+        public static final String BATTERY_SAVER_ALLOW_AOD = "battery_saver_allow_aod";
+
+        /**
+         * Whether to keep night mode setting (not force dark theme) when Battery Saver is on.
+         * 0 = disabled (use system default), 1 = keep user's night mode setting
+         * @hide
+         */
+        @Protected(readWrite = KnownSystemPackage.SETTINGS)
+        public static final String BATTERY_SAVER_ALLOW_NIGHT_MODE_OFF = "battery_saver_allow_night_mode_off";
+
+        /**
+         * Whether to keep normal brightness when Battery Saver is on.
+         * 0 = disabled (use system default), 1 = keep normal brightness
+         * @hide
+         */
+        @Protected(readWrite = KnownSystemPackage.SETTINGS)
+        public static final String BATTERY_SAVER_ALLOW_BRIGHTNESS = "battery_saver_allow_brightness";
+
+        // Battery Saver Options: Performance
+
+        /**
+         * Whether to allow launch boost when Battery Saver is on.
+         * 0 = disabled (use system default), 1 = allow launch boost
+         * @hide
+         */
+        @Protected(readWrite = KnownSystemPackage.SETTINGS)
+        public static final String BATTERY_SAVER_ALLOW_LAUNCH_BOOST = "battery_saver_allow_launch_boost";
+
+        /**
+         * Whether to allow normal app standby when Battery Saver is on.
+         * 0 = disabled (use system default), 1 = allow normal standby
+         * @hide
+         */
+        @Protected(readWrite = KnownSystemPackage.SETTINGS)
+        public static final String BATTERY_SAVER_ALLOW_STANDBY = "battery_saver_allow_standby";
+
+        /**
+         * Whether to allow background services when Battery Saver is on.
+         * 0 = disabled (use system default), 1 = allow background services
+         * @hide
+         */
+        @Protected(readWrite = KnownSystemPackage.SETTINGS)
+        public static final String BATTERY_SAVER_ALLOW_BACKGROUND = "battery_saver_allow_background";
+
+        /**
+         * Whether to disable quick doze when Battery Saver is on.
+         * 0 = disabled (use system default quick doze), 1 = disable quick doze
+         * @hide
+         */
+        @Protected(readWrite = KnownSystemPackage.SETTINGS)
+        public static final String BATTERY_SAVER_DISABLE_QUICK_DOZE = "battery_saver_disable_quick_doze";
+
+        // Battery Saver Options: Network
+
+        /**
+         * Whether to allow background network when Battery Saver is on.
+         * 0 = disabled (use system default firewall), 1 = allow background network
+         * @hide
+         */
+        @Protected(readWrite = KnownSystemPackage.SETTINGS)
+        public static final String BATTERY_SAVER_ALLOW_NETWORK = "battery_saver_allow_network";
+
+        /**
+         * Whether to keep data saver off when Battery Saver is on.
+         * 0 = disabled (use system default), 1 = keep data saver off
+         * @hide
+         */
+        @Protected(readWrite = KnownSystemPackage.SETTINGS)
+        public static final String BATTERY_SAVER_ALLOW_DATA = "battery_saver_allow_data";
+
+        // Battery Saver Options: Sensors
+
+        /**
+         * Whether to allow vibration when Battery Saver is on.
+         * 0 = disabled (use system default), 1 = allow vibration
+         * @hide
+         */
+        @Protected(readWrite = KnownSystemPackage.SETTINGS)
+        public static final String BATTERY_SAVER_ALLOW_VIBRATION = "battery_saver_allow_vibration";
+
+        /**
+         * Whether to allow sound trigger (Hey Google) when Battery Saver is on.
+         * 0 = disabled (use system default), 1 = allow sound trigger
+         * @hide
+         */
+        @Protected(readWrite = KnownSystemPackage.SETTINGS)
+        public static final String BATTERY_SAVER_ALLOW_SOUNDTRIGGER = "battery_saver_allow_soundtrigger";
+
+        /**
+         * Whether to allow optional sensors when Battery Saver is on.
+         * 0 = disabled (use system default), 1 = allow optional sensors
+         * @hide
+         */
+        @Protected(readWrite = KnownSystemPackage.SETTINGS)
+        public static final String BATTERY_SAVER_ALLOW_SENSORS = "battery_saver_allow_sensors";
+
+        /**
+         * Whether to allow attention detection when Battery Saver is on.
+         * 0 = disabled (use system default), 1 = allow attention detection
+         * @hide
+         */
+        @Protected(readWrite = KnownSystemPackage.SETTINGS)
+        public static final String BATTERY_SAVER_ALLOW_ATTENTION = "battery_saver_allow_attention";
+
+        /**
+         * Whether to allow camera-based auto-rotate when Battery Saver is on.
+         * 0 = disabled (use system default), 1 = allow camera rotation
+         * @hide
+         */
+        @Protected(readWrite = KnownSystemPackage.SETTINGS)
+        public static final String BATTERY_SAVER_ALLOW_CAMERA_ROTATE = "battery_saver_allow_camera_rotate";
+
+        // Battery Saver Options: Background tasks
+
+        /**
+         * Whether to allow full backups when Battery Saver is on.
+         * 0 = disabled (use system default), 1 = allow full backups
+         * @hide
+         */
+        @Protected(readWrite = KnownSystemPackage.SETTINGS)
+        public static final String BATTERY_SAVER_ALLOW_FULL_BACKUP = "battery_saver_allow_full_backup";
+
+        /**
+         * Whether to allow key-value backups when Battery Saver is on.
+         * 0 = disabled (use system default), 1 = allow key-value backups
+         * @hide
+         */
+        @Protected(readWrite = KnownSystemPackage.SETTINGS)
+        public static final String BATTERY_SAVER_ALLOW_KV_BACKUP = "battery_saver_allow_kv_backup";
+
+        // Battery Saver Options: Location
+
+        /**
+         * Whether to keep normal location when Battery Saver is on.
+         * 0 = disabled (use system default), 1 = keep normal location
+         * @hide
+         */
+        @Protected(readWrite = KnownSystemPackage.SETTINGS)
+        public static final String BATTERY_SAVER_ALLOW_LOCATION = "battery_saver_allow_location";
 
         // ExtSettings END
 
