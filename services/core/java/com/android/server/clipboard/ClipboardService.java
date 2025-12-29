@@ -105,6 +105,8 @@ import android.view.textclassifier.TextClassifierEvent;
 import android.view.textclassifier.TextLinks;
 import android.widget.Toast;
 
+import android.ext.settings.ExtSettings;
+
 import com.android.internal.R;
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.annotations.VisibleForTesting;
@@ -616,8 +618,11 @@ public class ClipboardService extends SystemService {
                 @UserIdInt int userId, int intendingUid, int intendingDeviceId) {
             final long oldIdentity = Binder.clearCallingIdentity();
             try {
-                if (DeviceConfig.getBoolean(DeviceConfig.NAMESPACE_CLIPBOARD,
-                        PROPERTY_AUTO_CLEAR_ENABLED, true)) {
+                if (ExtSettings.CLIPBOARD_AUTO_CLEAR_ENABLED.get(getContext())) {
+                    long timeout = ExtSettings.CLIPBOARD_AUTO_CLEAR_TIMEOUT.get(getContext());
+                    if (timeout <= 0) {
+                        return; // Disabled via timeout setting
+                    }
                     Pair<Integer, Integer> userIdDeviceId = new Pair<>(userId, intendingDeviceId);
                     mClipboardClearHandler.removeEqualMessages(ClipboardClearHandler.MSG_CLEAR,
                             userIdDeviceId);
@@ -628,18 +633,11 @@ public class ClipboardService extends SystemService {
                                     userId,
                                     intendingUid,
                                     userIdDeviceId);
-                    mClipboardClearHandler.sendMessageDelayed(clearMessage,
-                            getTimeoutForAutoClear());
+                    mClipboardClearHandler.sendMessageDelayed(clearMessage, timeout);
                 }
             } finally {
                 Binder.restoreCallingIdentity(oldIdentity);
             }
-        }
-
-        private long getTimeoutForAutoClear() {
-            return DeviceConfig.getLong(DeviceConfig.NAMESPACE_CLIPBOARD,
-                    PROPERTY_AUTO_CLEAR_TIMEOUT,
-                    DEFAULT_CLIPBOARD_TIMEOUT_MILLIS);
         }
 
         @Override
