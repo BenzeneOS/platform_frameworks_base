@@ -36,5 +36,7 @@
         <permission name="android.permission.PERSONAL_CONTEXT_RECEIVE_INSIGHTS"/>
         <permission name="android.permission.PERSONAL_CONTEXT_HOST_INSIGHT_SURFACE"/>
         <permission name="android.permission.PERSONAL_CONTEXT_READ_SETTINGS"/>
+        <!-- Required for "Force stop" option in recents task menu -->
+        <permission name="android.permission.FORCE_STOP_PACKAGES"/>
     </privapp-permissions>
 </permissions>
