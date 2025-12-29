@@ -305,5 +305,6 @@ public class SystemSettingsValidators {
         VALIDATORS.put(System.EDGE_LONG_SWIPE_ACTION, new InclusiveIntegerRangeValidator(0, 12));
         VALIDATORS.put(System.THREE_FINGER_SCREENSHOT, BOOLEAN_VALIDATOR);
         VALIDATORS.put(System.WIFI_STANDARD_ICON, BOOLEAN_VALIDATOR);
+        VALIDATORS.put(System.HEADS_UP_TIMEOUT, new InclusiveIntegerRangeValidator(1, 60));
     }
 }

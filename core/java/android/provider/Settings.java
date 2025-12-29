@@ -7435,6 +7435,12 @@ public final class Settings {
         public static final String WIFI_STANDARD_ICON = "wifi_standard_icon";
 
         /**
+         * Heads-up notification timeout in seconds.
+         * @hide
+         */
+        public static final String HEADS_UP_TIMEOUT = "heads_up_timeout";
+
+        /**
          * Checks if the specified app can modify system settings. As of API
          * level 23, an app cannot modify system settings unless it declares the
          * {@link android.Manifest.permission#WRITE_SETTINGS}
