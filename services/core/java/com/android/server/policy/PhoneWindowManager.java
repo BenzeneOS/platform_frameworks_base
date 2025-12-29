@@ -161,7 +161,10 @@ import android.media.AudioManager;
 import android.media.AudioManagerInternal;
 import android.media.AudioSystem;
 import android.media.IAudioService;
+import android.media.session.MediaController;
 import android.media.session.MediaSessionLegacyHelper;
+import android.media.session.MediaSessionManager;
+import android.media.session.PlaybackState;
 import android.os.Binder;
 import android.os.Bundle;
 import android.os.DeviceIdleManager;
@@ -339,6 +342,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     // must match: config_longPressOnBackBehavior in config.xml
     static final int LONG_PRESS_BACK_NOTHING = 0;
     static final int LONG_PRESS_BACK_GO_TO_VOICE_ASSIST = 1;
+
 
     // must match: config_longPressOnHomeBehavior in config.xml
     static final int LONG_PRESS_HOME_NOTHING = 0;
@@ -529,6 +533,17 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     volatile boolean mPowerKeyHandled;
     volatile boolean mBackKeyHandled;
     volatile boolean mEndCallKeyHandled;
+
+    // Volume wake feature
+    boolean mVolumeWakeScreen;
+    boolean mVolumeDownWakeTriggered;
+    boolean mVolumeUpWakeTriggered;
+    boolean mVolumeMuteWakeTriggered;
+
+    // Volume button music control (long press to skip tracks)
+    boolean mVolumeBtnMusicControls;
+    boolean mIsVolumeLongPress;
+
     volatile boolean mPowerButtonLaunchGestureTriggered;
     volatile boolean mPowerButtonLaunchGestureTriggeredDuringGoingToSleep;
 
@@ -743,6 +758,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     private static final int MSG_RINGER_TOGGLE_CHORD = 24;
     private static final int MSG_SWITCH_KEYBOARD_LAYOUT = 25;
     private static final int MSG_SET_DEFERRED_KEY_ACTIONS_EXECUTABLE = 27;
+    private static final int MSG_DISPATCH_VOLKEY_WITH_WAKELOCK = 28;
 
     private class PolicyHandler extends Handler {
 
@@ -826,6 +842,11 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                     final int keyCode = msg.arg1;
                     final long downTime = (Long) msg.obj;
                     mDeferredKeyActionExecutor.setActionsExecutable(keyCode, downTime);
+                    break;
+                case MSG_DISPATCH_VOLKEY_WITH_WAKELOCK:
+                    KeyEvent volKeyEvent = (KeyEvent) msg.obj;
+                    mIsVolumeLongPress = true;
+                    dispatchMediaKeyToSessionManager(volKeyEvent);
                     break;
             }
         }
@@ -912,6 +933,13 @@ public class PhoneWindowManager implements WindowManagerPolicy {
             resolver.registerContentObserver(Settings.Secure.getUriFor(
                     Settings.Secure.NAV_BAR_KIDS_MODE), false, this,
                     UserHandle.USER_ALL);
+            // Custom settings observers
+            resolver.registerContentObserver(
+                    Settings.System.getUriFor(Settings.System.VOLUME_WAKE_SCREEN),
+                    false, this, UserHandle.USER_ALL);
+            resolver.registerContentObserver(
+                    Settings.System.getUriFor(Settings.System.VOLBTN_MUSIC_CONTROLS),
+                    false, this, UserHandle.USER_ALL);
             updateSettings();
         }
 
@@ -1068,7 +1096,12 @@ public class PhoneWindowManager implements WindowManagerPolicy {
 
         if (!mPowerKeyHandled) {
             if (!interactive) {
-                wakeUpFromWakeKey(event);
+                if ((event.getFlags() & KeyEvent.FLAG_LONG_PRESS) != 0) {
+                    wakeUpFromWakeKey(event);
+                } else if (mSupportLongPressPowerWhenNonInteractive
+                        && hasLongPressOnPowerBehavior()) {
+                    wakeUpFromWakeKey(event);
+                }
             }
         } else {
             // handled by another power key policy.
@@ -1082,6 +1115,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     private void interceptPowerKeyUp(KeyEvent event, boolean canceled) {
         // Inform the StatusBar; but do not allow it to consume the event.
         sendSystemKeyToStatusBarAsync(event);
+
         finishPowerKeyPress();
     }
 
@@ -2942,6 +2976,14 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                 mRingerToggleChord = VOLUME_HUSH_OFF;
             }
 
+            // Custom settings - Volume wake
+            mVolumeWakeScreen = Settings.System.getIntForUser(resolver,
+                    Settings.System.VOLUME_WAKE_SCREEN, 0, UserHandle.USER_CURRENT) == 1;
+
+            // Custom settings - Volume button music controls
+            mVolumeBtnMusicControls = Settings.System.getIntForUser(resolver,
+                    Settings.System.VOLBTN_MUSIC_CONTROLS, 0, UserHandle.USER_CURRENT) == 1;
+
             // Configure wake gesture.
             boolean wakeGestureEnabledSetting = Settings.Secure.getIntForUser(resolver,
                     Settings.Secure.WAKE_GESTURE_ENABLED, 0,
@@ -4150,6 +4192,32 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         }
     }
 
+    private void setVolumeWakeTriggered(int keyCode, boolean triggered) {
+        switch (keyCode) {
+            case KeyEvent.KEYCODE_VOLUME_DOWN:
+                mVolumeDownWakeTriggered = triggered;
+                break;
+            case KeyEvent.KEYCODE_VOLUME_UP:
+                mVolumeUpWakeTriggered = triggered;
+                break;
+            case KeyEvent.KEYCODE_VOLUME_MUTE:
+                mVolumeMuteWakeTriggered = triggered;
+                break;
+        }
+    }
+
+    private boolean getVolumeWakeTriggered(int keyCode) {
+        switch (keyCode) {
+            case KeyEvent.KEYCODE_VOLUME_DOWN:
+                return mVolumeDownWakeTriggered;
+            case KeyEvent.KEYCODE_VOLUME_UP:
+                return mVolumeUpWakeTriggered;
+            case KeyEvent.KEYCODE_VOLUME_MUTE:
+                return mVolumeMuteWakeTriggered;
+        }
+        return false;
+    }
+
     @Override
     public void showRecentApps() {
         mHandler.removeMessages(MSG_DISPATCH_SHOW_RECENTS);
@@ -4469,6 +4537,10 @@ public class PhoneWindowManager implements WindowManagerPolicy {
             // When the screen is off and the key is not injected, determine whether
             // to wake the device but don't pass the key to the application.
             result = 0;
+            // Set isWakeKey based on isWakeKeyWhenScreenOff for keys that can wake
+            if (!isWakeKey && down && isWakeKeyWhenScreenOff(keyCode)) {
+                isWakeKey = true;
+            }
             if (isWakeKey && (!down || !isWakeKeyWhenScreenOff(keyCode))) {
                 isWakeKey = false;
             }
@@ -4537,6 +4609,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
             case KeyEvent.KEYCODE_BACK: {
                 notifyKeyGestureCompletedOnActionUp(event,
                         KeyGestureEvent.KEY_GESTURE_TYPE_BACK);
+
                 if (down) {
                     // There may have other embedded activities on the same Task. Try to move the
                     // focus before processing the back event.
@@ -4557,6 +4630,44 @@ public class PhoneWindowManager implements WindowManagerPolicy {
             case KeyEvent.KEYCODE_VOLUME_DOWN:
             case KeyEvent.KEYCODE_VOLUME_UP:
             case KeyEvent.KEYCODE_VOLUME_MUTE: {
+                // Handle volume wake - eat all down & up keys when using volume wake
+                // This disables volume control, music control, and "beep" on key up
+                if (isWakeKey && mVolumeWakeScreen && down) {
+                    setVolumeWakeTriggered(keyCode, true);
+                    break;
+                } else if (getVolumeWakeTriggered(keyCode) && !down) {
+                    result &= ~ACTION_PASS_TO_USER;
+                    setVolumeWakeTriggered(keyCode, false);
+                    break;
+                }
+
+                // Handle volume button music controls (long press to skip tracks when screen off)
+                if (!interactive && mVolumeBtnMusicControls
+                        && keyCode != KeyEvent.KEYCODE_VOLUME_MUTE) {
+                    if (down) {
+                        mIsVolumeLongPress = false;
+                        // Queue skip event on long press
+                        int newKeyCode = (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN)
+                                ? KeyEvent.KEYCODE_MEDIA_PREVIOUS
+                                : KeyEvent.KEYCODE_MEDIA_NEXT;
+                        KeyEvent newEvent = new KeyEvent(event.getDownTime(), event.getEventTime(),
+                                KeyEvent.ACTION_DOWN, newKeyCode, 0);
+                        Message msg = mHandler.obtainMessage(MSG_DISPATCH_VOLKEY_WITH_WAKELOCK,
+                                newEvent);
+                        msg.setAsynchronous(true);
+                        mHandler.sendMessageDelayed(msg, ViewConfiguration.getLongPressTimeout());
+                    } else {
+                        // Cancel skip event on key up
+                        mHandler.removeMessages(MSG_DISPATCH_VOLKEY_WITH_WAKELOCK);
+                        if (mIsVolumeLongPress) {
+                            // Long press happened, skip track event was sent, eat the key up
+                            result &= ~ACTION_PASS_TO_USER;
+                            break;
+                        }
+                        // Short press - let normal volume handling take over
+                    }
+                }
+
                 int gestureType = keyCode == KEYCODE_VOLUME_DOWN
                         ? KeyGestureEvent.KEY_GESTURE_TYPE_VOLUME_DOWN
                         : keyCode == KEYCODE_VOLUME_UP
@@ -5039,6 +5150,11 @@ public class PhoneWindowManager implements WindowManagerPolicy {
      */
     private boolean isWakeKeyWhenScreenOff(int keyCode) {
         switch (keyCode) {
+            case KeyEvent.KEYCODE_VOLUME_UP:
+            case KeyEvent.KEYCODE_VOLUME_DOWN:
+            case KeyEvent.KEYCODE_VOLUME_MUTE:
+                return mVolumeWakeScreen;
+
             case KeyEvent.KEYCODE_DPAD_UP:
             case KeyEvent.KEYCODE_DPAD_DOWN:
             case KeyEvent.KEYCODE_DPAD_LEFT:
@@ -5204,6 +5320,31 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     void dispatchMediaKeyWithWakeLockToAudioService(KeyEvent event) {
         if (mActivityManagerInternal.isSystemReady()) {
             MediaSessionLegacyHelper.getHelper(mContext).sendMediaButtonEvent(event, true);
+        }
+    }
+
+    /**
+     * Dispatch a media key event to the media session manager for volume button music controls.
+     */
+    private void dispatchMediaKeyToSessionManager(KeyEvent event) {
+        MediaSessionManager mediaSessionManager = mContext.getSystemService(MediaSessionManager.class);
+        if (mediaSessionManager == null) {
+            return;
+        }
+        List<MediaController> sessions = mediaSessionManager.getActiveSessionsForUser(
+                null, UserHandle.ALL);
+        if (sessions == null) {
+            return;
+        }
+        for (MediaController controller : sessions) {
+            PlaybackState state = controller.getPlaybackState();
+            if (state != null && state.getState() == PlaybackState.STATE_PLAYING) {
+                controller.dispatchMediaButtonEvent(event);
+                // Also send key up
+                KeyEvent upEvent = KeyEvent.changeAction(event, KeyEvent.ACTION_UP);
+                controller.dispatchMediaButtonEvent(upEvent);
+                break;
+            }
         }
     }
 
