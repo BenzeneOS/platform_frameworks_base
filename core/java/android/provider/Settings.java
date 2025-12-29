@@ -14297,6 +14297,14 @@ public final class Settings {
         public static final String DISABLE_SECURE_WINDOWS = "disable_secure_windows";
 
         /**
+         * Hide screen capture status from apps.
+         * When enabled (1), apps cannot detect screenshots or screen recording.
+         *
+         * @hide
+         */
+        public static final String HIDE_SCREEN_CAPTURE_STATUS = "hide_screen_capture_status";
+
+        /**
          * Controls if the adaptive authentication feature should be disabled, which
          * will attempt to lock the device after a number of consecutive authentication
          * attempts fail.

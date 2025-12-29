@@ -1831,9 +1831,15 @@ public class AppOpsManager {
      */
     public static final int OP_ACCESS_HID = AppOpEnums.APP_OP_ACCESS_HID;
 
+    /** @hide Bypass FLAG_SECURE for this app. */
+    public static final int OP_BYPASS_FLAG_SECURE = 179;
+
+    /** @hide Hide screen capture status from this app. */
+    public static final int OP_HIDE_SCREEN_CAPTURE_STATUS = 180;
+
     /** @hide */
     @UnsupportedAppUsage(maxTargetSdk = Build.VERSION_CODES.R, trackingBug = 170729553)
-    public static final int _NUM_OP = 179;
+    public static final int _NUM_OP = 181;
 
     /**
      * All app ops represented as strings.
@@ -2016,6 +2022,8 @@ public class AppOpsManager {
             OPSTR_READ_RESTRICTED_MESSAGES,
             OPSTR_WRITE_RESTRICTED_MESSAGES,
             OPSTR_ACCESS_HID,
+            OPSTR_BYPASS_FLAG_SECURE,
+            OPSTR_HIDE_SCREEN_CAPTURE_STATUS,
     })
     public @interface AppOpString {}
 
@@ -2925,6 +2933,12 @@ public class AppOpsManager {
      */
     public static final String OPSTR_ACCESS_HID = "android:access_hid";
 
+    /** @hide Bypass FLAG_SECURE for this app. */
+    public static final String OPSTR_BYPASS_FLAG_SECURE = "android:bypass_flag_secure";
+
+    /** @hide Hide screen capture status from this app. */
+    public static final String OPSTR_HIDE_SCREEN_CAPTURE_STATUS = "android:hide_screen_capture_status";
+
     /** {@link #sAppOpsToNote} not initialized yet for this op */
     private static final byte SHOULD_COLLECT_NOTE_OP_NOT_INITIALIZED = 0;
     /** Should not collect noting of this app-op in {@link #sAppOpsToNote} */
@@ -3691,7 +3705,15 @@ public class AppOpsManager {
                 "ACCESS_HID", AppOpInfo.PCC_MODE_INHERIT)
                 .setPermission(
                     com.android.hardware.input.Flags.hidApi()
-                            ? Manifest.permission.ACCESS_HID : null).build()
+                            ? Manifest.permission.ACCESS_HID : null).build(),
+        // Bypass FLAG_SECURE for this app
+        new AppOpInfo.Builder(OP_BYPASS_FLAG_SECURE, OPSTR_BYPASS_FLAG_SECURE,
+                "BYPASS_FLAG_SECURE", AppOpInfo.PCC_MODE_INHERIT)
+                .setDefaultMode(AppOpsManager.MODE_DEFAULT).build(),
+        // Hide screen capture status from this app
+        new AppOpInfo.Builder(OP_HIDE_SCREEN_CAPTURE_STATUS, OPSTR_HIDE_SCREEN_CAPTURE_STATUS,
+                "HIDE_SCREEN_CAPTURE_STATUS", AppOpInfo.PCC_MODE_INHERIT)
+                .setDefaultMode(AppOpsManager.MODE_DEFAULT).build()
     };
 
     // The number of longs needed to form a full bitmask of app ops

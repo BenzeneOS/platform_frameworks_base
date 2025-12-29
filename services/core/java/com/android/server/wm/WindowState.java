@@ -1961,7 +1961,13 @@ class WindowState extends WindowContainer<WindowState> implements WindowManagerP
     }
 
     boolean isSecureLocked() {
+        // Global bypass
         if (mWmService.getDisableSecureWindows()) {
+            return false;
+        }
+
+        // Per-app bypass via AppOps
+        if (shouldBypassFlagSecureForApp()) {
             return false;
         }
 
@@ -1976,6 +1982,32 @@ class WindowState extends WindowContainer<WindowState> implements WindowManagerP
         }
 
         return !DevicePolicyCache.getInstance().isScreenCaptureAllowed(mShowUserId);
+    }
+
+    private boolean shouldBypassFlagSecureForApp() {
+        String packageName = getOwningPackage();
+        if (packageName == null) {
+            return false;
+        }
+
+        // A starting window's package and uid never match, and AppOps logs that before the catch
+        // below can swallow it. There's no app content in a splash to bypass anyway.
+        if (mAttrs.type == TYPE_APPLICATION_STARTING) {
+            return false;
+        }
+
+        AppOpsManager appOps = mWmService.mContext.getSystemService(AppOpsManager.class);
+        if (appOps == null) {
+            return false;
+        }
+
+        try {
+            return appOps.checkOpNoThrow(AppOpsManager.OP_BYPASS_FLAG_SECURE,
+                    getOwningUid(), packageName) == AppOpsManager.MODE_ALLOWED;
+        } catch (SecurityException e) {
+            // Any other window whose package and uid disagree.
+            return false;
+        }
     }
 
     /**
