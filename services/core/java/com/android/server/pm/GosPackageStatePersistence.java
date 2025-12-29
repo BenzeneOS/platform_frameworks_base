@@ -21,6 +21,7 @@ class GosPackageStatePersistence {
     private static final String ATTR_PACKAGE_FLAG_STORAGE = "package-flags";
     private static final String ATTR_STORAGE_SCOPES = "storage-scopes";
     private static final String ATTR_CONTACT_SCOPES = "contact-scopes";
+    private static final String ATTR_SPOOFED_BATTERY_LEVEL = "spoofed-battery-level";
 
     /** @see Settings#writePackageRestrictions */
     static void serialize(PackageUserStateInternal packageUserState, TypedXmlSerializer serializer) throws IOException {
@@ -54,6 +55,10 @@ class GosPackageStatePersistence {
         if (packageFlagStorage != 0L) {
             serializer.attributeLong(null, ATTR_PACKAGE_FLAG_STORAGE, ps.packageFlagStorage);
         }
+        int spoofedBatteryLevel = ps.spoofedBatteryLevel;
+        if (spoofedBatteryLevel != -1) {
+            serializer.attributeInt(null, ATTR_SPOOFED_BATTERY_LEVEL, spoofedBatteryLevel);
+        }
     }
 
     static GosPackageState deserialize(TypedXmlPullParser parser) throws XmlPullParserException {
@@ -61,6 +66,7 @@ class GosPackageStatePersistence {
         long packageFlagStorage = 0L;
         byte[] storageScopes = null;
         byte[] contactScopes = null;
+        int spoofedBatteryLevel = -1;
 
         for (int i = 0, numAttr = parser.getAttributeCount(); i < numAttr; ++i) {
             String attr = parser.getAttributeName(i);
@@ -73,11 +79,13 @@ class GosPackageStatePersistence {
                     storageScopes = parser.getAttributeBytesHex(i);
                 case ATTR_CONTACT_SCOPES ->
                     contactScopes = parser.getAttributeBytesHex(i);
+                case ATTR_SPOOFED_BATTERY_LEVEL ->
+                    spoofedBatteryLevel = parser.getAttributeInt(i);
                 default ->
                     Slog.e(TAG, "deserialize: unknown attribute " + attr);
             }
         }
-        return new GosPackageState(flagStorage1, packageFlagStorage, storageScopes, contactScopes);
+        return new GosPackageState(flagStorage1, packageFlagStorage, storageScopes, contactScopes, spoofedBatteryLevel);
     }
 
     // Compatibility with legacy serialized GosPackageState.
@@ -91,7 +99,8 @@ class GosPackageStatePersistence {
         long packageFlagStorage = parser.getAttributeLong(null, "GrapheneOS-package-flags", 0L);
         byte[] storageScopes = parser.getAttributeBytesHex(null, "GrapheneOS-storage-scopes", null);
         byte[] contactScopes = parser.getAttributeBytesHex(null, "GrapheneOS-contact-scopes", null);
-        return new GosPackageState(flagStorage1, packageFlagStorage, storageScopes, contactScopes);
+        // Legacy format didn't have spoofedBatteryLevel, default to -1 (disabled)
+        return new GosPackageState(flagStorage1, packageFlagStorage, storageScopes, contactScopes, -1);
     }
 
     private static long migrateLegacyFlags(int flags) {

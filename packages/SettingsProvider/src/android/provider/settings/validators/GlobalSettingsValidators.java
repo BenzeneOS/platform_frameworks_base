@@ -534,6 +534,7 @@ public class GlobalSettingsValidators {
         VALIDATORS.put(Global.VOLUME_PANEL_ON_LEFT, BOOLEAN_VALIDATOR);
         VALIDATORS.put(Global.CLIPBOARD_AUTO_CLEAR_ENABLED, BOOLEAN_VALIDATOR);
         VALIDATORS.put(Global.CLIPBOARD_AUTO_CLEAR_TIMEOUT, NON_NEGATIVE_INTEGER_VALIDATOR);
+        VALIDATORS.put(Global.BATTERY_SPOOF_LEVEL, new InclusiveIntegerRangeValidator(-1, 100));
         // ExtSettings END
     }
 }

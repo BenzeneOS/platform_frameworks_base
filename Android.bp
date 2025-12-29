@@ -403,6 +403,7 @@ java_defaults {
     static_libs: [
         "aconfig_storage_reader_java",
         "android.hardware.common.fmq-V1-java",
+        "vendor.benzeneos.battery-V1-java",
         "bouncycastle-repackaged-unbundled",
         "com.android.sysprop.view",
         "framework-internal-utils",

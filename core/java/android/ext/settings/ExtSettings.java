@@ -82,6 +82,11 @@ public class ExtSettings {
             Setting.Scope.GLOBAL, Settings.Global.CLIPBOARD_AUTO_CLEAR_TIMEOUT,
             (int) TimeUnit.HOURS.toMillis(1));  // default: 1 hour
 
+    // Global battery spoof level. -1 = disabled (show real), 0-100 = spoof to that level.
+    // Per-app settings can override this.
+    public static final IntSetting BATTERY_SPOOF_LEVEL = new IntSetting(
+            Setting.Scope.GLOBAL, Settings.Global.BATTERY_SPOOF_LEVEL, -1 /* disabled by default */);
+
     public static final BoolSysProperty ALLOW_NATIVE_DEBUG_BY_DEFAULT = new BoolSysProperty(
             "persist.native_debug", defaultBool(R.bool.setting_default_allow_native_debugging));
 
