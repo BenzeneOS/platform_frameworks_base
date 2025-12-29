@@ -18,6 +18,7 @@ package com.android.systemui.volume.dialog
 
 import android.content.Context
 import android.os.Bundle
+import android.provider.Settings
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
@@ -45,6 +46,12 @@ constructor(
 ) : ComponentDialog(context, R.style.Theme_SystemUI_Dialog_Volume) {
     // Use horizontal volume dialog if the audio tile details view is enabled
     private val isVolumeDialogVertical = !desktopAudioTileDetailsFeatureInteractor.isEnabled()
+    // Check if volume panel should be on the left side
+    private val isVolumePanelOnLeft = Settings.Global.getInt(
+        context.contentResolver,
+        Settings.Global.VOLUME_PANEL_ON_LEFT,
+        0
+    ) != 0
 
     init {
         with(window!!) {
@@ -62,12 +69,17 @@ constructor(
                 attributes.apply {
                     title = "VolumeDialog" // Not the same as Window#setTitle
                 }
+            val horizontalGravity = if (isVolumePanelOnLeft) Gravity.START else Gravity.END
             if (isVolumeDialogVertical) {
                 setLayout(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT)
-                setGravity(Gravity.END)
+                setGravity(horizontalGravity)
             } else {
                 setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-                setGravity(Gravity.TOP or Gravity.END)
+                setGravity(Gravity.TOP or horizontalGravity)
+            }
+            // Set layout direction on decor view early to prevent animation glitch
+            if (isVolumePanelOnLeft) {
+                decorView.layoutDirection = View.LAYOUT_DIRECTION_RTL
             }
         }
         setCancelable(false)

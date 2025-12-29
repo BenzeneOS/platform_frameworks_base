@@ -14172,6 +14172,14 @@ public final class Settings {
                 KnownSystemPackage.SETUP_WIZARD})
         public static final String GEOCODER = "geocoder";
 
+        /**
+         * Whether the volume panel should appear on the left.
+         * 0 = right (default), 1 = left
+         * @hide
+         */
+        @Protected(read = KnownSystemPackage.SYSTEM_UI, readWrite = KnownSystemPackage.SETTINGS)
+        public static final String VOLUME_PANEL_ON_LEFT = "volume_panel_on_left";
+
         // ExtSettings END
 
         // NOTE: If you add new settings here, be sure to add them to
