@@ -4377,6 +4377,7 @@ package android.content.pm {
     method @NonNull public android.content.pm.GosPackageState.Editor setKillUidAfterApply(boolean);
     method @NonNull public android.content.pm.GosPackageState.Editor setNotifyUidAfterApply(boolean);
     method @NonNull public android.content.pm.GosPackageState.Editor setPackageFlagState(int, boolean);
+    method @NonNull public android.content.pm.GosPackageState.Editor setSpoofedBatteryLevel(int);
     method @NonNull public android.content.pm.GosPackageState.Editor setStorageScopes(@Nullable byte[]);
   }
 
@@ -5277,6 +5278,7 @@ package android.ext {
   }
 
   public interface KnownSystemPackage {
+    field public static final int PERMISSION_CONTROLLER = 4; // 0x4
     field public static final int SETTINGS = 0; // 0x0
     field public static final int SETUP_WIZARD = 3; // 0x3
     field public static final int SHELL = 1; // 0x1
