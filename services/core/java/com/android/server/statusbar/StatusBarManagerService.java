@@ -948,6 +948,28 @@ public class StatusBarManagerService extends IStatusBarService.Stub implements D
         runWithStatusBarIfPresent(bar -> bar.animateExpandSettingsPanel(subPanel));
     }
 
+    @Override
+    public void startAssist(Bundle args) {
+        enforceStatusBarService();
+        if (mBar != null) {
+            try {
+                mBar.startAssist(args);
+            } catch (RemoteException ex) {
+            }
+        }
+    }
+
+    @Override
+    public void toggleRecentApps() {
+        enforceStatusBarService();
+        if (mBar != null) {
+            try {
+                mBar.toggleRecentApps();
+            } catch (RemoteException ex) {
+            }
+        }
+    }
+
     public void addTile(ComponentName component) {
         addQsTileToFrontOrEnd(component, false);
     }

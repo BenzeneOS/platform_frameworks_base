@@ -7590,6 +7590,15 @@ public final class Settings {
         public static final String VOLBTN_MUSIC_CONTROLS = "volbtn_music_controls";
 
         /**
+         * Action for edge long swipe gesture.
+         * 0 = nothing, 1 = menu, 2 = app switch, 3 = search, 4 = voice search,
+         * 5 = in-app search, 6 = launch camera, 7 = sleep, 8 = last app,
+         * 9 = split screen, 10 = kill app, 11 = play/pause music, 12 = flashlight
+         * @hide
+         */
+        public static final String EDGE_LONG_SWIPE_ACTION = "edge_long_swipe_action";
+
+        /**
          * Checks if the specified app can modify system settings. As of API
          * level 23, an app cannot modify system settings unless it declares the
          * {@link android.Manifest.permission#WRITE_SETTINGS}

@@ -264,4 +264,14 @@ interface IStatusBarService
 
     /** Terminates the started motion cues session */
     void endMotionCuesSession();
+
+    /**
+     * Starts the default assistant app.
+     */
+    void startAssist(in Bundle args);
+
+    /**
+     * Toggle recent apps.
+     */
+    void toggleRecentApps();
 }

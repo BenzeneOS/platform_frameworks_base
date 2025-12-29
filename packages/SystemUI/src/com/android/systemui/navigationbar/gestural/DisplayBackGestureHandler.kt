@@ -18,9 +18,11 @@ package com.android.systemui.navigationbar.gestural
 
 import android.content.Context
 import android.content.res.Configuration
+import android.database.ContentObserver
 import android.graphics.PixelFormat
 import android.graphics.Point
 import android.graphics.Region
+import android.os.Handler
 import android.os.Trace
 import android.util.Log
 import android.view.ISystemGestureExclusionListener
@@ -93,6 +95,20 @@ constructor(
         }
     private val edgeBackPlugin = createEdgeBackPlugin(backCallback)
     private val excludeRegion = Region()
+    private var isLongSwipeEnabled = android.provider.Settings.System.getInt(
+        context.contentResolver,
+        android.provider.Settings.System.EDGE_LONG_SWIPE_ACTION,
+        0) != 0
+
+    private val longSwipeObserver = object : ContentObserver(Handler(uiThreadContext.looper)) {
+        override fun onChange(selfChange: Boolean) {
+            isLongSwipeEnabled = android.provider.Settings.System.getInt(
+                context.contentResolver,
+                android.provider.Settings.System.EDGE_LONG_SWIPE_ACTION,
+                0) != 0
+            edgeBackPlugin.setLongSwipeEnabled(isLongSwipeEnabled)
+        }
+    }
 
     private val inputMonitorCompat = InputMonitorCompat("edge-swipe", displayId)
     private val inputEventReceiver: InputChannelCompat.InputEventReceiver =
@@ -109,6 +125,7 @@ constructor(
                 newConfig?.windowConfiguration?.maxBounds?.let {
                     displaySize.set(it.width(), it.height())
                     edgeBackPlugin.setDisplaySize(displaySize)
+                    edgeBackPlugin.setLongSwipeEnabled(isLongSwipeEnabled)
                 }
             }
         }
@@ -128,6 +145,10 @@ constructor(
     init {
         configurationController.addCallback(configurationListener)
         registerSystemGestureExclusionListener()
+        context.contentResolver.registerContentObserver(
+            android.provider.Settings.System.getUriFor(
+                android.provider.Settings.System.EDGE_LONG_SWIPE_ACTION),
+            false, longSwipeObserver)
     }
 
     override fun onMotionEvent(ev: MotionEvent) = edgeBackPlugin.onMotionEvent(ev)
@@ -162,6 +183,7 @@ constructor(
         edgeBackPlugin.onDestroy()
         configurationController.removeCallback(configurationListener)
         unregisterSystemGestureExclusionListener()
+        context.contentResolver.unregisterContentObserver(longSwipeObserver)
     }
 
     private fun createEdgeBackPlugin(
@@ -176,6 +198,7 @@ constructor(
             backPanelController.setBackCallback(backCallback)
             backPanelController.setLayoutParams(createLayoutParams())
             backPanelController.setDisplaySize(displaySize)
+            backPanelController.setLongSwipeEnabled(isLongSwipeEnabled)
         } finally {
             Trace.endSection()
         }

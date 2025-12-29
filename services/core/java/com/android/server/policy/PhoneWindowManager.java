@@ -350,6 +350,20 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     static final int LONG_PRESS_BACK_NOTHING = 0;
     static final int LONG_PRESS_BACK_GO_TO_VOICE_ASSIST = 1;
 
+    // Edge long swipe action values (Settings.System.EDGE_LONG_SWIPE_ACTION)
+    static final int EDGE_ACTION_NOTHING = 0;
+    static final int EDGE_ACTION_MENU = 1;
+    static final int EDGE_ACTION_APP_SWITCH = 2;
+    static final int EDGE_ACTION_SEARCH = 3;
+    static final int EDGE_ACTION_VOICE_SEARCH = 4;
+    static final int EDGE_ACTION_IN_APP_SEARCH = 5;
+    static final int EDGE_ACTION_LAUNCH_CAMERA = 6;
+    static final int EDGE_ACTION_SLEEP = 7;
+    static final int EDGE_ACTION_LAST_APP = 8;
+    static final int EDGE_ACTION_SPLIT_SCREEN = 9;
+    static final int EDGE_ACTION_KILL_APP = 10;
+    static final int EDGE_ACTION_PLAY_PAUSE_MUSIC = 11;
+    static final int EDGE_ACTION_FLASHLIGHT = 12;
 
     // must match: config_longPressOnHomeBehavior in config.xml
     static final int LONG_PRESS_HOME_NOTHING = 0;
@@ -526,6 +540,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     // to hold wakelocks during dispatch and eliminating the critical path.
     volatile boolean mPowerKeyHandled;
     volatile boolean mBackKeyHandled;
+    volatile boolean mLongSwipeDown;
     volatile boolean mEndCallKeyHandled;
 
     // Volume wake feature
@@ -560,6 +575,9 @@ public class PhoneWindowManager implements WindowManagerPolicy {
             }
         }
     };
+    // Edge long swipe action
+    int mEdgeLongSwipeAction;
+
     volatile boolean mPowerButtonLaunchGestureTriggered;
     volatile boolean mPowerButtonLaunchGestureTriggeredDuringGoingToSleep;
 
@@ -967,6 +985,9 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                     false, this, UserHandle.USER_ALL);
             resolver.registerContentObserver(
                     Settings.System.getUriFor(Settings.System.TORCH_LONG_PRESS_POWER_TIMEOUT),
+                    false, this, UserHandle.USER_ALL);
+            resolver.registerContentObserver(
+                    Settings.System.getUriFor(Settings.System.EDGE_LONG_SWIPE_ACTION),
                     false, this, UserHandle.USER_ALL);
             updateSettings();
         }
@@ -3108,6 +3129,10 @@ public class PhoneWindowManager implements WindowManagerPolicy {
             mTorchTimeout = Settings.System.getIntForUser(resolver,
                     Settings.System.TORCH_LONG_PRESS_POWER_TIMEOUT, 0, UserHandle.USER_CURRENT);
 
+            // Custom settings - Edge long swipe action
+            mEdgeLongSwipeAction = Settings.System.getIntForUser(resolver,
+                    Settings.System.EDGE_LONG_SWIPE_ACTION, 0, UserHandle.USER_CURRENT);
+
             // Configure wake gesture.
             boolean wakeGestureEnabledSetting = Settings.Secure.getIntForUser(resolver,
                     Settings.Secure.WAKE_GESTURE_ENABLED, 0,
@@ -4385,6 +4410,131 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         }
     }
 
+    private void switchToLastApp() {
+        try {
+            final String defaultHomePackage = resolveCurrentLauncherPackage();
+            final List<RecentTaskInfo> tasks = ActivityTaskManager.getService().getRecentTasks(
+                    5, ActivityManager.RECENT_IGNORE_UNAVAILABLE, mCurrentUserId).getList();
+
+            for (int i = 1; i < tasks.size(); i++) {
+                final RecentTaskInfo task = tasks.get(i);
+                if (task.origActivity != null) {
+                    if (task.origActivity.getPackageName().equals(defaultHomePackage)) {
+                        continue;
+                    }
+                } else if (task.realActivity != null) {
+                    if (task.realActivity.getPackageName().equals(defaultHomePackage)) {
+                        continue;
+                    }
+                } else {
+                    continue;
+                }
+
+                if (task.id >= 0) {
+                    final ActivityOptions opts = ActivityOptions.makeBasic();
+                    ActivityTaskManager.getService().startActivityFromRecents(task.taskId, opts.toBundle());
+                    return;
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Could not switch to last app", e);
+        }
+    }
+
+    private String resolveCurrentLauncherPackage() {
+        final Intent homeIntent = new Intent(Intent.ACTION_MAIN);
+        homeIntent.addCategory(Intent.CATEGORY_HOME);
+        final ResolveInfo info = mPackageManager.resolveActivityAsUser(homeIntent,
+                PackageManager.MATCH_DEFAULT_ONLY, mCurrentUserId);
+        if (info != null && info.activityInfo != null) {
+            return info.activityInfo.packageName;
+        }
+        return null;
+    }
+
+    private void performEdgeLongSwipeAction() {
+        switch (mEdgeLongSwipeAction) {
+            case EDGE_ACTION_NOTHING:
+                break;
+            case EDGE_ACTION_MENU:
+                triggerVirtualKeypress(KeyEvent.KEYCODE_MENU);
+                break;
+            case EDGE_ACTION_APP_SWITCH:
+                toggleRecentApps();
+                break;
+            case EDGE_ACTION_SEARCH:
+                launchAssistAction(null, INVALID_INPUT_DEVICE_ID, 0,
+                        AssistUtils.INVOCATION_TYPE_UNKNOWN);
+                break;
+            case EDGE_ACTION_VOICE_SEARCH:
+                launchAssistAction(null, INVALID_INPUT_DEVICE_ID, 0,
+                        AssistUtils.INVOCATION_TYPE_VOICE);
+                break;
+            case EDGE_ACTION_IN_APP_SEARCH:
+                triggerVirtualKeypress(KeyEvent.KEYCODE_SEARCH);
+                break;
+            case EDGE_ACTION_LAUNCH_CAMERA:
+                launchCameraAction();
+                break;
+            case EDGE_ACTION_SLEEP:
+                mPowerManager.goToSleep(SystemClock.uptimeMillis());
+                break;
+            case EDGE_ACTION_LAST_APP:
+                switchToLastApp();
+                break;
+            case EDGE_ACTION_SPLIT_SCREEN:
+                toggleSplitScreen();
+                break;
+            case EDGE_ACTION_KILL_APP:
+                killForegroundApp();
+                break;
+            case EDGE_ACTION_PLAY_PAUSE_MUSIC:
+                triggerVirtualKeypress(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE);
+                break;
+            case EDGE_ACTION_FLASHLIGHT:
+                toggleTorch();
+                break;
+        }
+    }
+
+    private void launchCameraAction() {
+        sendCloseSystemWindows();
+        Intent intent = new Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA_SECURE);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        try {
+            mContext.startActivityAsUser(intent, UserHandle.CURRENT);
+        } catch (ActivityNotFoundException e) {
+            Log.e(TAG, "Could not launch camera action", e);
+        }
+    }
+
+    private void toggleSplitScreen() {
+        StatusBarManagerInternal statusbar = getStatusBarManagerInternal();
+        if (statusbar != null) {
+            statusbar.toggleSplitScreen();
+        }
+    }
+
+    private void killForegroundApp() {
+        try {
+            final String defaultHomePackage = resolveCurrentLauncherPackage();
+            final IActivityManager am = ActivityManager.getService();
+            final ActivityTaskManager.RootTaskInfo focusedStack = am.getFocusedRootTaskInfo();
+
+            if (focusedStack == null || focusedStack.topActivity == null) {
+                return;
+            }
+
+            final String packageName = focusedStack.topActivity.getPackageName();
+            if (packageName != null && !packageName.equals(defaultHomePackage)
+                    && !packageName.equals("com.android.systemui")) {
+                am.forceStopPackage(packageName, mCurrentUserId);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Could not kill foreground app", e);
+        }
+    }
+
     private void setVolumeWakeTriggered(int keyCode, boolean triggered) {
         switch (keyCode) {
             case KeyEvent.KEYCODE_VOLUME_DOWN:
@@ -4786,8 +4936,25 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         // Handle special keys.
         switch (keyCode) {
             case KeyEvent.KEYCODE_BACK: {
+                boolean isLongSwipe = (event.getFlags() & KeyEvent.FLAG_LONG_SWIPE) != 0;
                 notifyKeyGestureCompletedOnActionUp(event,
                         KeyGestureEvent.KEY_GESTURE_TYPE_BACK);
+
+                if (mLongSwipeDown && isLongSwipe && !down) {
+                    // Trigger configured long swipe action
+                    performEdgeLongSwipeAction();
+                    // Reset long swipe state
+                    mLongSwipeDown = false;
+                    // Don't pass back press to app
+                    result &= ~ACTION_PASS_TO_USER;
+                    break;
+                }
+                mLongSwipeDown = isLongSwipe && down;
+                if (mLongSwipeDown) {
+                    // Don't pass back press to app
+                    result &= ~ACTION_PASS_TO_USER;
+                    break;
+                }
 
                 if (down) {
                     // There may have other embedded activities on the same Task. Try to move the
