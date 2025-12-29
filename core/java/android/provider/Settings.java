@@ -7599,6 +7599,13 @@ public final class Settings {
         public static final String EDGE_LONG_SWIPE_ACTION = "edge_long_swipe_action";
 
         /**
+         * Heads-up notification timeout in seconds.
+         * Default: 5 seconds
+         * @hide
+         */
+        public static final String HEADS_UP_TIMEOUT = "heads_up_timeout";
+
+        /**
          * Whether three-finger swipe gesture takes a screenshot.
          * 0 = disabled, 1 = enabled
          * @hide

@@ -119,7 +119,8 @@ public class HeadsUpManagerImpl
     private final int mMinimumDisplayTimeDefault;
     private final int mMinimumDisplayTimeForUserInitiated;
     private final int mStickyForSomeTimeAutoDismissTime;
-    private final int mAutoDismissTime;
+    private final int mDefaultHeadsUpDecaySecs;
+    private int mAutoDismissTime;
     private final DelayableExecutor mExecutor;
 
     private final int mExtensionTime;
@@ -204,7 +205,8 @@ public class HeadsUpManagerImpl
                 R.integer.heads_up_notification_minimum_time_for_user_initiated);
         mStickyForSomeTimeAutoDismissTime = resources.getInteger(
                 R.integer.sticky_heads_up_notification_time);
-        mAutoDismissTime = resources.getInteger(R.integer.heads_up_notification_decay);
+        mDefaultHeadsUpDecaySecs = resources.getInteger(R.integer.heads_up_notification_decay) / 1000;
+        mAutoDismissTime = getHeadsUpTimeoutMs();
         mExtensionTime = resources.getInteger(R.integer.ambient_notification_extension_time);
         mTouchAcceptanceDelay = resources.getInteger(R.integer.touch_acceptance_delay);
         mSnoozedPackages = new ArrayMap<>();
@@ -222,12 +224,17 @@ public class HeadsUpManagerImpl
                     mSnoozeLengthMs = packageSnoozeLengthMs;
                     mLogger.logSnoozeLengthChange(packageSnoozeLengthMs);
                 }
+                mAutoDismissTime = getHeadsUpTimeoutMs();
             }
         };
         globalSettings.registerContentObserverAsync(
                 globalSettings.getUriFor(SETTING_HEADS_UP_SNOOZE_LENGTH_MS),
                 /* notifyForDescendants= */ false,
                 settingsObserver);
+        context.getContentResolver().registerContentObserver(
+                android.provider.Settings.System.getUriFor(
+                        android.provider.Settings.System.HEADS_UP_TIMEOUT),
+                false, settingsObserver);
 
         statusBarStateController.addCallback(mStatusBarStateListener);
         updateResources();
@@ -254,6 +261,20 @@ public class HeadsUpManagerImpl
             mVisualStabilityProvider.addPersistentReorderingAllowedListener(
                     mOnReorderingAllowedListener);
         }
+    }
+
+    /**
+     * Gets the heads-up notification timeout in milliseconds from settings.
+     * Enforces a minimum of 1 second to prevent immediate dismissal.
+     */
+    private int getHeadsUpTimeoutMs() {
+        int timeoutSecs = android.provider.Settings.System.getIntForUser(
+                mContext.getContentResolver(),
+                android.provider.Settings.System.HEADS_UP_TIMEOUT,
+                mDefaultHeadsUpDecaySecs,
+                android.os.UserHandle.USER_CURRENT);
+        // Enforce minimum of 1 second
+        return Math.max(timeoutSecs, 1) * 1000;
     }
 
     /**
