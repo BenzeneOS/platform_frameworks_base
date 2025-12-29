@@ -49,6 +49,7 @@ public final class KnownSystemPackages {
             case KnownSystemPackage.SHELL -> shell;
             case KnownSystemPackage.SYSTEM_UI -> systemUi;
             case KnownSystemPackage.SETUP_WIZARD -> setupWizard;
+            case KnownSystemPackage.PERMISSION_CONTROLLER -> permissionController;
             default -> throw new IllegalArgumentException();
         };
     }
