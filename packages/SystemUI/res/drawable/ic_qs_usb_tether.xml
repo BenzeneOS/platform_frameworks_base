@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Copyright (C) 2025 Amaan Qureshi <contact@amaanq.com>
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+         http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+        android:width="24dp"
+        android:height="24dp"
+        android:viewportWidth="24"
+        android:viewportHeight="24"
+        android:tint="?android:attr/colorControlNormal">
+
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M18.25,11.12h1.97V8.39h1.65l-2.64-3.6l-2.64,3.6h1.67V11.12z M18.25,12.93h1.97v2.72h1.65l-2.64,3.6l-2.64-3.6h1.67V12.93z M14.57,6.17h-3.17v3.17h0.79v1.22l-3.22,1.64V5.38h1.71l-2.46-3.37l-2.46,3.37h1.71v8.18l-3.21-1.39v-1.46c0.47-0.28 0.79-0.78 0.79-1.37c0-0.87-0.71-1.58-1.58-1.58c-0.87,0-1.58,0.71-1.58,1.58c0,0.59 0.32,1.09 0.79,1.37v2.5l4.8,2.08v2.1c-0.94,0.31-1.63,1.19-1.63,2.25c0,1.31 1.06,2.38 2.38,2.38c1.31,0 2.38-1.06 2.38-2.38c0-1.05-0.69-1.93-1.63-2.25v-3.42l4.8-2.44v-2.19h0.79L14.57,6.17L14.57,6.17z" />
+</vector>

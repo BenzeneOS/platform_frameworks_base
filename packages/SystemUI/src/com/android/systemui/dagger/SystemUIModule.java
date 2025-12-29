@@ -114,6 +114,7 @@ import com.android.systemui.qs.FgsManagerControllerImpl;
 import com.android.systemui.qs.footer.dagger.FooterActionsModule;
 import com.android.systemui.qs.tiles.CaffeineTileModule;
 import com.android.systemui.qs.tiles.ReadingModeTileModule;
+import com.android.systemui.qs.tiles.UsbTetherTileModule;
 import com.android.systemui.qs.tiles.impl.qr.ui.model.QRCodeScannerModule;
 import com.android.systemui.recents.Recents;
 import com.android.systemui.recordissue.RecordIssueModule;
@@ -312,6 +313,7 @@ import javax.inject.Named;
         TunerModule.class,
         UsbModule.class,
         UiModeModule.class,
+        UsbTetherTileModule.class,
         UserDomainLayerModule.class,
         UserModule.class,
         UtilModule.class,

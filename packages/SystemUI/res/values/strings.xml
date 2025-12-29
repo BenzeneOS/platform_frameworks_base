@@ -5081,6 +5081,10 @@
     <string name="accessibility_quick_settings_reading_mode_off">Reading mode off.</string>
     <string name="accessibility_quick_settings_reading_mode_on">Reading mode on.</string>
 
+    <!-- Benzene USB Tether Tile -->
+    <string name="quick_settings_usb_tether_label">USB tethering</string>
+    <string name="quick_settings_usb_tether_no_usb">No USB connected</string>
+
     <!-- Network traffic indicator -->
     <string name="accessibility_network_traffic">Network traffic: <xliff:g id="speed" example="1.5 MB/s">%s</xliff:g></string>
 
