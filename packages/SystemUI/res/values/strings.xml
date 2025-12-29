@@ -4584,6 +4584,18 @@
     <!-- Description for the Ambient Cue accessibility action label for expanding. [CHAR LIMIT=NONE] -->
     <string name="ambient_cue_expand_action">expand</string>
 
+    <!-- Benzene Caffeine Tile -->
+    <string name="quick_settings_caffeine_label">Caffeine</string>
+    <string name="accessibility_quick_settings_caffeine_off">Caffeine off.</string>
+    <string name="accessibility_quick_settings_caffeine_on">Caffeine on.</string>
+    <string name="quick_settings_caffeine_duration_infinite">Infinite</string>
+    <string name="quick_settings_caffeine_duration_until_unplugged">While charging</string>
+    <string name="quick_settings_caffeine_duration_minutes">%d min</string>
+    <string name="quick_settings_caffeine_done">Done</string>
+    <string name="quick_settings_caffeine_off">Off</string>
+    <string name="quick_settings_caffeine_until_unplugged_indicator">While charging</string>
+    <string name="quick_settings_caffeine_infinite_indicator" translatable="false">∞</string>
+
     <!-- Network traffic indicator -->
     <string name="accessibility_network_traffic">Network traffic: <xliff:g id="speed" example="1.5 MB/s">%s</xliff:g></string>
 
