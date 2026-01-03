@@ -2569,6 +2569,12 @@ public class SettingsProvider extends ContentProvider {
             // SettingsProvider runs in system_server process
             return;
         }
+        if (Binder.getCallingUid() == Process.SYSTEM_UID) {
+            // For in-process calls, getCallingPid() returns stale data from the last
+            // cross-process Binder transaction, so the PID check above may fail.
+            // UID is reliable since all system_server code runs as SYSTEM_UID.
+            return;
+        }
         String callingPackage = getCallingPackage();
         if (callingPackage == null) {
             if (Build.IS_DEBUGGABLE) {
