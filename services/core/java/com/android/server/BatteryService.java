@@ -1837,13 +1837,11 @@ public final class BatteryService extends SystemService {
                     break;
             }
 
-            // Check for battery level spoofing
-            if (id == BatteryManager.BATTERY_PROPERTY_CAPACITY) {
-                int spoofedLevel = getSpoofedBatteryLevelForCaller();
-                if (spoofedLevel >= 0) {
-                    prop.setLong(spoofedLevel);
-                    return 0; // success
-                }
+            // Check for battery spoofing
+            Long spoofedValue = getSpoofedPropertyForCaller(id);
+            if (spoofedValue != null) {
+                prop.setLong(spoofedValue);
+                return 0; // success
             }
 
             return mHealthServiceWrapper.getProperty(id, prop);
@@ -1855,7 +1853,7 @@ public final class BatteryService extends SystemService {
     }
 
     /**
-     * Returns the spoofed battery level for the calling app, or -1 if no spoofing is configured.
+     * Returns the spoofed value for the given battery property, or null if no spoofing should occur.
      * System apps are never spoofed.
      *
      * Per-app spoofedBatteryLevel values:
@@ -1863,39 +1861,92 @@ public final class BatteryService extends SystemService {
      *   -2 = force real battery (override global)
      *   0-100 = custom override
      */
-    private int getSpoofedBatteryLevelForCaller() {
+    private Long getSpoofedPropertyForCaller(int propertyId) {
         int callingUid = Binder.getCallingUid();
 
         // Don't spoof for system apps
         if (callingUid < Process.FIRST_APPLICATION_UID) {
-            return -1;
+            return null;
         }
 
         // Get the package name for the calling UID
         PackageManagerInternal pmi = LocalServices.getService(PackageManagerInternal.class);
         if (pmi == null) {
-            return -1;
+            return null;
         }
 
         String packageName = pmi.getNameForUid(callingUid);
         if (packageName == null) {
-            return -1;
+            return null;
         }
         int userId = UserHandle.getUserId(callingUid);
 
         GosPackageState ps = GosPackageState.get(packageName, userId);
         int perAppLevel = (ps != null && !ps.isNone()) ? ps.spoofedBatteryLevel : -1;
 
+        // Check if this app has per-app battery forcing enabled
         if (perAppLevel == -2) {
             // Force real battery (override global)
-            return -1;
-        } else if (perAppLevel >= 0) {
+            return null;
+        }
+
+        int spoofedLevel;
+        if (perAppLevel >= 0) {
             // Custom per-app override
-            return perAppLevel;
+            spoofedLevel = perAppLevel;
         } else {
             // Use global setting (-1 = use global)
-            return android.ext.settings.ExtSettings.BATTERY_SPOOF_LEVEL.get(mContext);
+            spoofedLevel = android.ext.settings.ExtSettings.BATTERY_SPOOF_LEVEL.get(mContext);
         }
+
+        // Get spoof settings
+        int spoofedCharging = android.ext.settings.ExtSettings.BATTERY_SPOOF_CHARGING.get(mContext);
+        boolean hideMetrics = android.ext.settings.ExtSettings.BATTERY_SPOOF_HIDE_METRICS.get(mContext);
+
+        switch (propertyId) {
+            case BatteryManager.BATTERY_PROPERTY_CAPACITY:
+                if (spoofedLevel >= 0) {
+                    // Apply jitter
+                    int jitter = android.ext.settings.ExtSettings.BATTERY_SPOOF_JITTER.get(mContext);
+                    int jitterInterval = android.ext.settings.ExtSettings.BATTERY_SPOOF_JITTER_INTERVAL.get(mContext);
+                    return (long) applyBatteryJitter(spoofedLevel, jitter, jitterInterval, packageName);
+                }
+                break;
+
+            case BatteryManager.BATTERY_PROPERTY_STATUS:
+                if (spoofedCharging >= 0) {
+                    // 0 = discharging, >0 = charging
+                    return (long) (spoofedCharging == 0 ? BatteryManager.BATTERY_STATUS_DISCHARGING : BatteryManager.BATTERY_STATUS_CHARGING);
+                }
+                break;
+
+            case BatteryManager.BATTERY_PROPERTY_CURRENT_NOW:
+            case BatteryManager.BATTERY_PROPERTY_CURRENT_AVERAGE:
+            case BatteryManager.BATTERY_PROPERTY_CHARGE_COUNTER:
+            case BatteryManager.BATTERY_PROPERTY_ENERGY_COUNTER:
+            case BatteryManager.BATTERY_PROPERTY_STATE_OF_HEALTH:
+                if (hideMetrics) {
+                    return Long.MIN_VALUE; // Indicates unsupported/unavailable
+                }
+                break;
+        }
+
+        return null;
+    }
+
+    /**
+     * Apply jitter to battery level. Uses package name + time-based seed for per-app variation.
+     * This reduces fingerprinting: each app sees a different jitter offset.
+     */
+    private int applyBatteryJitter(int level, int jitterAmount, int intervalSeconds, String packageName) {
+        if (jitterAmount <= 0) {
+            return level;
+        }
+        long timeSeed = System.currentTimeMillis() / (intervalSeconds * 1000L);
+        long seed = packageName.hashCode() ^ timeSeed;
+        java.util.Random random = new java.util.Random(seed);
+        int offset = random.nextInt(jitterAmount * 2 + 1) - jitterAmount;
+        return Math.max(1, Math.min(100, level + offset));
     }
 
     private final class LocalService extends BatteryManagerInternal {

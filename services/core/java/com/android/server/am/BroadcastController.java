@@ -136,6 +136,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.function.BiFunction;
 
 class BroadcastController {
@@ -615,8 +616,10 @@ class BroadcastController {
                             originalStickyCallingUid))) {
                         sticky = broadcast.intent;
                     }
+                    // Spoof battery intent before enqueueing to receiver
+                    Intent intentToDeliver = maybeSpoofBatteryIntent(broadcast.intent, callingUid, userId);
                     BroadcastQueue queue = mBroadcastQueue;
-                    BroadcastRecord r = new BroadcastRecord(queue, broadcast.intent, null, null,
+                    BroadcastRecord r = new BroadcastRecord(queue, intentToDeliver, null, null,
                             null, -1  /*callingPid*/, -1 /*callingUid*/, false, null, null, null,
                             null, OP_NONE,
                             BroadcastOptions.makeWithDeferUntilActive(broadcast.deferUntilActive),
@@ -2502,7 +2505,7 @@ class BroadcastController {
 
     /**
      * If the intent is ACTION_BATTERY_CHANGED and the caller has battery spoofing configured,
-     * returns a modified copy of the intent with the spoofed battery level.
+     * returns a modified copy of the intent with spoofed battery information.
      * Otherwise returns the original intent unchanged.
      *
      * Per-app spoofedBatteryLevel values:
@@ -2531,6 +2534,13 @@ class BroadcastController {
             return intent;
         }
 
+        // Don't spoof for SystemUI - it needs real battery info for status bar
+        String systemUiPackage = mContext.getResources().getString(
+                com.android.internal.R.string.config_systemUi);
+        if (packageName.equals(systemUiPackage)) {
+            return intent;
+        }
+
         GosPackageState ps = GosPackageState.get(packageName, userId);
         int perAppLevel = (ps != null && !ps.isNone()) ? ps.spoofedBatteryLevel : -1;
 
@@ -2546,14 +2556,75 @@ class BroadcastController {
             spoofedLevel = android.ext.settings.ExtSettings.BATTERY_SPOOF_LEVEL.get(mContext);
         }
 
-        if (spoofedLevel < 0) {
+        // Check if any spoofing is enabled
+        // spoofedCharging: -1 = show real, 0 = discharging (unplugged), 1/2/4 = charging (AC/USB/Wireless)
+        int spoofedCharging = android.ext.settings.ExtSettings.BATTERY_SPOOF_CHARGING.get(mContext);
+        int spoofedHealth = android.ext.settings.ExtSettings.BATTERY_SPOOF_HEALTH.get(mContext);
+        boolean hideMetrics = android.ext.settings.ExtSettings.BATTERY_SPOOF_HIDE_METRICS.get(mContext);
+
+        if (spoofedLevel < 0 && spoofedCharging < 0 && spoofedHealth < 0 && !hideMetrics) {
             return intent;
         }
 
-        // Clone the intent and modify the battery level
+        // Clone the intent and apply spoofing
         Intent spoofedIntent = new Intent(intent);
-        spoofedIntent.putExtra(BatteryManager.EXTRA_LEVEL, spoofedLevel);
+
+        // Spoof battery level with per-app jitter (different offset per package for fingerprinting resistance)
+        if (spoofedLevel >= 0) {
+            int jitter = android.ext.settings.ExtSettings.BATTERY_SPOOF_JITTER.get(mContext);
+            int jitterInterval = android.ext.settings.ExtSettings.BATTERY_SPOOF_JITTER_INTERVAL.get(mContext);
+            int effectiveLevel = applyBatteryJitter(spoofedLevel, jitter, jitterInterval, packageName);
+            spoofedIntent.putExtra(BatteryManager.EXTRA_LEVEL, effectiveLevel);
+        }
+
+        // Spoof charging status and plug type
+        if (spoofedCharging >= 0) {
+            if (spoofedCharging == 0) {
+                // Discharging (unplugged)
+                spoofedIntent.putExtra(BatteryManager.EXTRA_STATUS, BatteryManager.BATTERY_STATUS_DISCHARGING);
+                spoofedIntent.putExtra(BatteryManager.EXTRA_PLUGGED, 0);
+            } else {
+                // Charging with specific power source (AC=1, USB=2, Wireless=4)
+                spoofedIntent.putExtra(BatteryManager.EXTRA_STATUS, BatteryManager.BATTERY_STATUS_CHARGING);
+                spoofedIntent.putExtra(BatteryManager.EXTRA_PLUGGED, spoofedCharging);
+            }
+        }
+
+        // Spoof health status
+        if (spoofedHealth >= 0) {
+            spoofedIntent.putExtra(BatteryManager.EXTRA_HEALTH, spoofedHealth);
+        }
+
+        // Hide detailed metrics
+        if (hideMetrics) {
+            spoofedIntent.putExtra(BatteryManager.EXTRA_TEMPERATURE, 670); // 67.0°C
+            spoofedIntent.putExtra(BatteryManager.EXTRA_VOLTAGE, 6700); // 6.7V
+            // Only spoof health here if not already set by explicit health setting
+            if (spoofedHealth < 0) {
+                spoofedIntent.putExtra(BatteryManager.EXTRA_HEALTH, BatteryManager.BATTERY_HEALTH_GOOD);
+            }
+            spoofedIntent.removeExtra(BatteryManager.EXTRA_CHARGE_COUNTER);
+            spoofedIntent.removeExtra(BatteryManager.EXTRA_CYCLE_COUNT);
+            spoofedIntent.removeExtra(BatteryManager.EXTRA_MAX_CHARGING_CURRENT);
+            spoofedIntent.removeExtra(BatteryManager.EXTRA_MAX_CHARGING_VOLTAGE);
+        }
+
         return spoofedIntent;
+    }
+
+    /**
+     * Apply jitter to battery level. Uses package name + time-based seed for per-app variation.
+     * This reduces fingerprinting: each app sees a different jitter offset.
+     */
+    private int applyBatteryJitter(int level, int jitterAmount, int intervalSeconds, String packageName) {
+        if (jitterAmount <= 0) {
+            return level;
+        }
+        long timeSeed = System.currentTimeMillis() / (intervalSeconds * 1000L);
+        long seed = packageName.hashCode() ^ timeSeed;
+        Random random = new Random(seed);
+        int offset = random.nextInt(jitterAmount * 2 + 1) - jitterAmount;
+        return Math.max(1, Math.min(100, level + offset));
     }
 
     @VisibleForTesting
