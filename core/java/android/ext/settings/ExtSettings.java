@@ -90,6 +90,28 @@ public class ExtSettings {
     public static final IntSetting BATTERY_SPOOF_LEVEL = new IntSetting(
             Setting.Scope.GLOBAL, Settings.Global.BATTERY_SPOOF_LEVEL, -1 /* disabled by default */);
 
+    // Spoof charging status. -1 = show real, 0 = discharging (unplugged), 1 = charging (AC), 2 = charging (USB), 4 = charging (Wireless)
+    // This controls both EXTRA_STATUS and EXTRA_PLUGGED in battery broadcasts
+    public static final IntSetting BATTERY_SPOOF_CHARGING = new IntSetting(
+            Setting.Scope.GLOBAL, Settings.Global.BATTERY_SPOOF_CHARGING, -1 /* disabled by default */);
+
+    // Spoof health status. -1 = show real, 1 = unknown, 2 = good, 3 = overheat, 4 = dead, 5 = over voltage, 7 = cold
+    public static final IntSetting BATTERY_SPOOF_HEALTH = new IntSetting(
+            Setting.Scope.GLOBAL, Settings.Global.BATTERY_SPOOF_HEALTH, -1 /* disabled by default */);
+
+    // Hide detailed metrics (temp, voltage, current, cycle count) from apps
+    public static final BoolSetting BATTERY_SPOOF_HIDE_METRICS = new BoolSetting(
+            Setting.Scope.GLOBAL, Settings.Global.BATTERY_SPOOF_HIDE_METRICS, false);
+
+    // Jitter amount for battery level (0 = disabled, 1-10 = ±1% to ±10%)
+    // Different apps see different jitter offsets to reduce fingerprinting
+    public static final IntSetting BATTERY_SPOOF_JITTER = new IntSetting(
+            Setting.Scope.GLOBAL, Settings.Global.BATTERY_SPOOF_JITTER, 0 /* disabled by default */);
+
+    // Jitter refresh interval in seconds (how often the jitter value changes)
+    public static final IntSetting BATTERY_SPOOF_JITTER_INTERVAL = new IntSetting(
+            Setting.Scope.GLOBAL, Settings.Global.BATTERY_SPOOF_JITTER_INTERVAL, 60 /* 1 minute */);
+
     public static final BoolSysProperty ALLOW_NATIVE_DEBUG_BY_DEFAULT = new BoolSysProperty(
             "persist.native_debug", defaultBool(R.bool.setting_default_allow_native_debugging));
 

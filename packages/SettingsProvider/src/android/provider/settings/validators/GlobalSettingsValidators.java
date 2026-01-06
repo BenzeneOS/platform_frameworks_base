@@ -535,6 +535,11 @@ public class GlobalSettingsValidators {
         VALIDATORS.put(Global.CLIPBOARD_AUTO_CLEAR_ENABLED, BOOLEAN_VALIDATOR);
         VALIDATORS.put(Global.CLIPBOARD_AUTO_CLEAR_TIMEOUT, NON_NEGATIVE_INTEGER_VALIDATOR);
         VALIDATORS.put(Global.BATTERY_SPOOF_LEVEL, new InclusiveIntegerRangeValidator(-1, 100));
+        VALIDATORS.put(Global.BATTERY_SPOOF_CHARGING, new InclusiveIntegerRangeValidator(-1, 4));
+        VALIDATORS.put(Global.BATTERY_SPOOF_HEALTH, new InclusiveIntegerRangeValidator(-1, 7));
+        VALIDATORS.put(Global.BATTERY_SPOOF_HIDE_METRICS, BOOLEAN_VALIDATOR);
+        VALIDATORS.put(Global.BATTERY_SPOOF_JITTER, new InclusiveIntegerRangeValidator(0, 10));
+        VALIDATORS.put(Global.BATTERY_SPOOF_JITTER_INTERVAL, new InclusiveIntegerRangeValidator(10, 3600));
 
         // Battery Charge Limit
         VALIDATORS.put(Global.BATTERY_CHARGE_LIMIT, BOOLEAN_VALIDATOR);

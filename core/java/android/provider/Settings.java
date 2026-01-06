@@ -14771,6 +14771,43 @@ public final class Settings {
         @Protected(readWrite = KnownSystemPackage.SETTINGS)
         public static final String BATTERY_SPOOF_LEVEL = "battery_spoof_level";
 
+        /**
+         * Spoof charging status. -1 = show real, 0 = discharging (unplugged), 1 = charging (AC), 2 = charging (USB), 4 = charging (Wireless).
+         * This controls both EXTRA_STATUS and EXTRA_PLUGGED in battery broadcasts.
+         * @hide
+         */
+        @Protected(readWrite = KnownSystemPackage.SETTINGS)
+        public static final String BATTERY_SPOOF_CHARGING = "battery_spoof_charging";
+
+        /**
+         * Spoof health status. -1 = show real, 1 = unknown, 2 = good, 3 = overheat, 4 = dead, 5 = over voltage, 7 = cold.
+         * @hide
+         */
+        @Protected(readWrite = KnownSystemPackage.SETTINGS)
+        public static final String BATTERY_SPOOF_HEALTH = "battery_spoof_health";
+
+        /**
+         * Hide detailed battery metrics from apps (temp, voltage, current, cycle count).
+         * @hide
+         */
+        @Protected(readWrite = KnownSystemPackage.SETTINGS)
+        public static final String BATTERY_SPOOF_HIDE_METRICS = "battery_spoof_hide_metrics";
+
+        /**
+         * Jitter amount for battery level (0 = disabled, 1-10 = ±1% to ±10%).
+         * Different apps see different jitter offsets to reduce fingerprinting.
+         * @hide
+         */
+        @Protected(readWrite = KnownSystemPackage.SETTINGS)
+        public static final String BATTERY_SPOOF_JITTER = "battery_spoof_jitter";
+
+        /**
+         * Jitter refresh interval in seconds (how often the jitter value changes).
+         * @hide
+         */
+        @Protected(readWrite = KnownSystemPackage.SETTINGS)
+        public static final String BATTERY_SPOOF_JITTER_INTERVAL = "battery_spoof_jitter_interval";
+
         // Battery Saver Options: Display
 
         /**
