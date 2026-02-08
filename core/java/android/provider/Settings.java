@@ -6162,6 +6162,20 @@ public final class Settings {
         public static final String ACCELEROMETER_ROTATION = "accelerometer_rotation";
 
         /**
+         * Control which rotation angles the accelerometer can use when
+         * {@link #ACCELEROMETER_ROTATION} is enabled.
+         * Value is a bitwise combination of:
+         * 1 = 0 degrees (portrait)
+         * 2 = 90 degrees (landscape)
+         * 4 = 180 degrees (inverted portrait)
+         * 8 = 270 degrees (inverted landscape)
+         * Default -1 means use system config (all except 180).
+         * @hide
+         */
+        public static final String ACCELEROMETER_ROTATION_ANGLES =
+                "accelerometer_rotation_angles";
+
+        /**
          * Default screen rotation when no other policy applies.
          * When {@link #ACCELEROMETER_ROTATION} is zero and no on-screen Activity expresses a
          * preference, this rotation value will be used. Must be one of the
