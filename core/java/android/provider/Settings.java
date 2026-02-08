@@ -6176,6 +6176,15 @@ public final class Settings {
                 "accelerometer_rotation_angles";
 
         /**
+         * Whether to play notification sound and vibration if screen is ON.
+         * 0 - never
+         * 1 - always (default)
+         * @hide
+         */
+        public static final String NOTIFICATION_SOUND_VIB_SCREEN_ON =
+                "notification_sound_vib_screen_on";
+
+        /**
          * Default screen rotation when no other policy applies.
          * When {@link #ACCELEROMETER_ROTATION} is zero and no on-screen Activity expresses a
          * preference, this rotation value will be used. Must be one of the
