@@ -569,6 +569,9 @@ public class GlobalSettingsValidators {
         VALIDATORS.put(Global.BATTERY_SAVER_ALLOW_FULL_BACKUP, BOOLEAN_VALIDATOR);
         VALIDATORS.put(Global.BATTERY_SAVER_ALLOW_KV_BACKUP, BOOLEAN_VALIDATOR);
         VALIDATORS.put(Global.BATTERY_SAVER_ALLOW_LOCATION, BOOLEAN_VALIDATOR);
+
+        // Package Manager
+        VALIDATORS.put(Global.PM_DOWNGRADE_ALLOWED, BOOLEAN_VALIDATOR);
         // ExtSettings END
     }
 }
