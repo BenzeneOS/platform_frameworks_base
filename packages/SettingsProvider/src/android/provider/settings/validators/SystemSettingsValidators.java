@@ -182,6 +182,7 @@ public class SystemSettingsValidators {
         VALIDATORS.put(System.ACCELEROMETER_ROTATION, BOOLEAN_VALIDATOR);
         VALIDATORS.put(System.ACCELEROMETER_ROTATION_ANGLES,
                 new InclusiveIntegerRangeValidator(-1, 15));
+        VALIDATORS.put(System.NOTIFICATION_SOUND_VIB_SCREEN_ON, BOOLEAN_VALIDATOR);
         VALIDATORS.put(System.USER_ROTATION, new InclusiveIntegerRangeValidator(0, 3));
         VALIDATORS.put(System.DTMF_TONE_WHEN_DIALING, BOOLEAN_VALIDATOR);
         VALIDATORS.put(System.SOUND_EFFECTS_ENABLED, BOOLEAN_VALIDATOR);
