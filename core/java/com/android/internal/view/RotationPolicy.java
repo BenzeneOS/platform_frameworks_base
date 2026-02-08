@@ -173,6 +173,29 @@ public final class RotationPolicy {
     }
 
     /**
+     * Returns whether the given rotation is allowed by the user's rotation angles bitmask.
+     *
+     * @param rotation           one of the Surface.ROTATION_* constants
+     * @param userRotationAngles bitmask from ACCELEROMETER_ROTATION_ANGLES (-1 = use defaults)
+     * @param allowAllRotations  device default from config_allowAllRotations
+     */
+    public static boolean isRotationAllowed(int rotation,
+            int userRotationAngles, boolean allowAllRotations) {
+        if (userRotationAngles < 0) {
+            userRotationAngles = allowAllRotations
+                    ? (1 | 2 | 4 | 8)  // all angles
+                    : (1 | 2 | 8);     // all except 180
+        }
+        switch (rotation) {
+            case Surface.ROTATION_0:   return (userRotationAngles & 1) != 0;
+            case Surface.ROTATION_90:  return (userRotationAngles & 2) != 0;
+            case Surface.ROTATION_180: return (userRotationAngles & 4) != 0;
+            case Surface.ROTATION_270: return (userRotationAngles & 8) != 0;
+        }
+        return false;
+    }
+
+    /**
      * If true, the screen can be rotated via the accelerometer in all 4 rotations as the default
      * behavior.
      */
