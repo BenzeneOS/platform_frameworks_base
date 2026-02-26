@@ -1837,9 +1837,12 @@ public class AppOpsManager {
     /** @hide Hide screen capture status from this app. */
     public static final int OP_HIDE_SCREEN_CAPTURE_STATUS = 180;
 
+    /** @hide Allow app to serve as Cloud Media Provider */
+    public static final int OP_MANAGE_CLOUD_MEDIA_PROVIDERS = 181;
+
     /** @hide */
     @UnsupportedAppUsage(maxTargetSdk = Build.VERSION_CODES.R, trackingBug = 170729553)
-    public static final int _NUM_OP = 181;
+    public static final int _NUM_OP = 182;
 
     /**
      * All app ops represented as strings.
@@ -2024,6 +2027,7 @@ public class AppOpsManager {
             OPSTR_ACCESS_HID,
             OPSTR_BYPASS_FLAG_SECURE,
             OPSTR_HIDE_SCREEN_CAPTURE_STATUS,
+            OPSTR_MANAGE_CLOUD_MEDIA_PROVIDERS,
     })
     public @interface AppOpString {}
 
@@ -2939,6 +2943,9 @@ public class AppOpsManager {
     /** @hide Hide screen capture status from this app. */
     public static final String OPSTR_HIDE_SCREEN_CAPTURE_STATUS = "android:hide_screen_capture_status";
 
+    /** @hide Allow app to serve as Cloud Media Provider */
+    public static final String OPSTR_MANAGE_CLOUD_MEDIA_PROVIDERS = "android:manage_cloud_media_providers";
+
     /** {@link #sAppOpsToNote} not initialized yet for this op */
     private static final byte SHOULD_COLLECT_NOTE_OP_NOT_INITIALIZED = 0;
     /** Should not collect noting of this app-op in {@link #sAppOpsToNote} */
@@ -3713,6 +3720,11 @@ public class AppOpsManager {
         // Hide screen capture status from this app
         new AppOpInfo.Builder(OP_HIDE_SCREEN_CAPTURE_STATUS, OPSTR_HIDE_SCREEN_CAPTURE_STATUS,
                 "HIDE_SCREEN_CAPTURE_STATUS", AppOpInfo.PCC_MODE_INHERIT)
+                .setDefaultMode(AppOpsManager.MODE_DEFAULT).build(),
+        // Allow app to serve as Cloud Media Provider
+        new AppOpInfo.Builder(OP_MANAGE_CLOUD_MEDIA_PROVIDERS, OPSTR_MANAGE_CLOUD_MEDIA_PROVIDERS,
+                "MANAGE_CLOUD_MEDIA_PROVIDERS", AppOpInfo.PCC_MODE_INHERIT)
+                .setPermission("com.android.providers.media.permission.MANAGE_CLOUD_MEDIA_PROVIDERS")
                 .setDefaultMode(AppOpsManager.MODE_DEFAULT).build()
     };
 
