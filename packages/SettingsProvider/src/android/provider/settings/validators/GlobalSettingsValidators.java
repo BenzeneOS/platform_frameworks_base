@@ -487,6 +487,7 @@ public class GlobalSettingsValidators {
         VALIDATORS.put(Global.WATCH_RANGING_AVAILABLE, BOOLEAN_VALIDATOR);
 
         // ExtSettings BEGIN
+        VALIDATORS.put(Global.NOTIFICATION_VOLUME_FOLLOWS_RINGER, BOOLEAN_VALIDATOR);
         VALIDATORS.put(Global.VOLUME_PANEL_ON_LEFT, BOOLEAN_VALIDATOR);
         // ExtSettings END
     }

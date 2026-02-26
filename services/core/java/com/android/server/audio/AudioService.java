@@ -8188,6 +8188,17 @@ public class AudioService extends IAudioService.Stub
             ringerModeAffectedStreams &= ~(1 << AudioSystem.STREAM_DTMF);
         }
 
+        // When notification volume is separate from ring volume, check if user wants
+        // notification to follow ringer mode or be independent
+        if (!mNotifAliasRing) {
+            boolean notifFollowsRinger = Settings.Global.getInt(mContentResolver,
+                    Settings.Global.NOTIFICATION_VOLUME_FOLLOWS_RINGER, 1) != 0;
+            if (!notifFollowsRinger) {
+                // Independent: notification sounds are not affected by ringer mode
+                ringerModeAffectedStreams &= ~(1 << AudioSystem.STREAM_NOTIFICATION);
+            }
+        }
+
         if (ringerModeAffectsAlarm()) {
             if (mRingerModeAffectsAlarm) {
                 boolean muteAlarmWithRinger =
@@ -11366,6 +11377,9 @@ public class AudioService extends IAudioService.Stub
 
             mContentResolver.registerContentObserver(Settings.Secure.getUriFor(
                     Settings.Secure.VOICE_INTERACTION_SERVICE), false, this);
+
+            mContentResolver.registerContentObserver(Settings.Global.getUriFor(
+                    Settings.Global.NOTIFICATION_VOLUME_FOLLOWS_RINGER), false, this);
         }
 
         @Override

@@ -88,8 +88,11 @@ class AudioVolumeInteractor(
             combine(
                 notificationsSoundPolicyInteractor.isZenMuted(audioStream),
                 getAudioStream(AudioStream(AudioManager.STREAM_RING)).map { it.isMuted },
-            ) { isZenMuted, isRingMuted ->
-                !isZenMuted && !isRingMuted
+                audioRepository.getAudioStream(audioStream).map { it.isAffectedByRingerMode },
+            ) { isZenMuted, isRingMuted, isAffectedByRingerMode ->
+                // If notification is not affected by ringer mode (independent volume),
+                // ignore the ring muted state. Otherwise, require ring to not be muted.
+                !isZenMuted && (!isAffectedByRingerMode || !isRingMuted)
             }
         } else {
             notificationsSoundPolicyInteractor.isZenMuted(audioStream).map { !it }
@@ -104,10 +107,13 @@ class AudioVolumeInteractor(
         if (isZenMuted) {
             return audioRepository.getLastAudibleVolume(audioStreamModel.audioStream)
         }
-        val isNotificationOrRing =
-            audioStreamModel.audioStream.value == AudioManager.STREAM_RING ||
-                audioStreamModel.audioStream.value == AudioManager.STREAM_NOTIFICATION
-        if (isNotificationOrRing && ringerMode.value == AudioManager.RINGER_MODE_VIBRATE) {
+        // Check if this stream is actually affected by ringer mode
+        val shouldApplyRingerModeLogic =
+            audioStreamModel.isAffectedByRingerMode &&
+                (audioStreamModel.audioStream.value == AudioManager.STREAM_RING ||
+                    audioStreamModel.audioStream.value == AudioManager.STREAM_NOTIFICATION)
+
+        if (shouldApplyRingerModeLogic && ringerMode.value == AudioManager.RINGER_MODE_VIBRATE) {
             // For ringer-mode affected streams, show volume as zero when ringer mode is vibrate
             if (
                 audioStreamModel.audioStream.value == AudioManager.STREAM_RING ||
