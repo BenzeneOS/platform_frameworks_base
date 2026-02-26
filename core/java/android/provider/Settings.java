@@ -13116,6 +13116,14 @@ public final class Settings {
                 "back_gesture_inset_scale_right";
 
         /**
+         * Whether to show the navigation bar hint (gesture pill) in gesture navigation mode.
+         * 0 = hidden, 1 = visible (default)
+         * @hide
+         */
+        @Readable
+        public static final String NAVIGATION_BAR_HINT = "navigation_bar_hint";
+
+        /**
          * Current provider of proximity-based sharing services.
          * Default value in @string/config_defaultNearbySharingComponent.
          * No VALIDATOR as this setting will not be backed up.
