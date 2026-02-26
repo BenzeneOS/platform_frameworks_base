@@ -14616,6 +14616,15 @@ public final class Settings {
         public static final String CERT_TRANSPARENCY_DOWNLOADER = "cert_transparency_downloader";
 
         /**
+         * Whether notification volume follows ringer.
+         * 0 = independent, 1 = follows ringer
+         * @hide
+         */
+        @Protected(readWrite = KnownSystemPackage.SETTINGS)
+        public static final String NOTIFICATION_VOLUME_FOLLOWS_RINGER =
+                "notification_volume_follows_ringer";
+
+        /**
          * Whether the volume panel should appear on the left.
          * 0 = right (default), 1 = left
          * @hide

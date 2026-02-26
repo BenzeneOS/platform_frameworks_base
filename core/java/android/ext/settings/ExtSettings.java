@@ -64,6 +64,9 @@ public class ExtSettings {
     public static final IntSetting NFC_AUTO_OFF = new IntSetting(
             Setting.Scope.GLOBAL, Settings.Global.NFC_AUTO_OFF, 0 /* off by default */);
 
+    public static final BoolSetting NOTIFICATION_VOLUME_FOLLOWS_RINGER = new BoolSetting(
+            Setting.Scope.GLOBAL, Settings.Global.NOTIFICATION_VOLUME_FOLLOWS_RINGER, true);
+
     public static final BoolSetting VOLUME_PANEL_ON_LEFT = new BoolSetting(
             Setting.Scope.GLOBAL, Settings.Global.VOLUME_PANEL_ON_LEFT, false);
 
