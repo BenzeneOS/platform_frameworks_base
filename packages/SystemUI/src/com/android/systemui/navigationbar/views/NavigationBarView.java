@@ -633,9 +633,11 @@ public class NavigationBarView extends FrameLayout {
         // Always disable recents when alternate car mode UI is active and for secondary displays.
         boolean disableRecent = isRecentsButtonDisabled();
 
-        // Disable the home handle if both home and recents are disabled.
-        boolean disableHomeHandle = disableRecent
-                && ((mDisabledFlags & View.STATUS_BAR_DISABLE_HOME) != 0);
+        // Disable the home handle if both home and recents are disabled, or if navigation bar hint is disabled
+        boolean navigationBarHintDisabled = Settings.Secure.getInt(
+                getContext().getContentResolver(), Settings.Secure.NAVIGATION_BAR_HINT, 1) == 0;
+        boolean disableHomeHandle = navigationBarHintDisabled
+                || (disableRecent && ((mDisabledFlags & View.STATUS_BAR_DISABLE_HOME) != 0));
 
         boolean disableBack = !isBackDismissIme && (mEdgeBackGestureHandler.isHandlingGestures()
                 || ((mDisabledFlags & View.STATUS_BAR_DISABLE_BACK) != 0))
