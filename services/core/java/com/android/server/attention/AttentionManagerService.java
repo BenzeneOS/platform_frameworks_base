@@ -283,7 +283,12 @@ public class AttentionManagerService extends SystemService {
         }
 
         // don't allow attention check in screen off state or power save mode
-        if (!mPowerManager.isInteractive() || mPowerManager.isPowerSaveMode()) {
+        // unless user has enabled attention during battery saver
+        boolean allowAttention = android.provider.Settings.Global.getInt(
+                mContext.getContentResolver(),
+                android.provider.Settings.Global.BATTERY_SAVER_ALLOW_ATTENTION, 0) == 1;
+        if (!mPowerManager.isInteractive()
+                || (mPowerManager.isPowerSaveMode() && !allowAttention)) {
             return false;
         }
 

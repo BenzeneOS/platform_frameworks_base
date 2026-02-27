@@ -119,8 +119,13 @@ final class BlurController {
 
     private void updateBlurEnabled() {
         synchronized (mLock) {
+            // Check if user allows blur during battery saver
+            boolean allowBlurInBatterySaver = Settings.Global.getInt(
+                    mContext.getContentResolver(), Settings.Global.BATTERY_SAVER_ALLOW_BLUR, 0) == 1;
+            boolean disabledByPowerSave = mInPowerSaveMode && !allowBlurInBatterySaver;
+
             final boolean newEnabled = CROSS_WINDOW_BLUR_SUPPORTED && !mBlurDisabledSetting
-                    && !mInPowerSaveMode && !mTunnelModeEnabled && !mDisabledByThermal;
+                    && !disabledByPowerSave && !mTunnelModeEnabled && !mDisabledByThermal;
             if (mBlurEnabled == newEnabled) {
                 return;
             }

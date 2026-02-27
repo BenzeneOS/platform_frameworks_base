@@ -957,6 +957,8 @@ public class DisplayModeDirector {
                 Settings.System.getUriFor(Settings.System.MIN_REFRESH_RATE);
         private final Uri mLowPowerModeSetting =
                 Settings.Global.getUriFor(Settings.Global.LOW_POWER_MODE);
+        private final Uri mBatterySaverRefreshRateCapSetting =
+                Settings.Global.getUriFor(Settings.Global.BATTERY_SAVER_REFRESH_RATE_CAP);
         private final Uri mMatchContentFrameRateSetting =
                 Settings.Secure.getUriFor(Settings.Secure.MATCH_CONTENT_FRAME_RATE);
 
@@ -1026,6 +1028,8 @@ public class DisplayModeDirector {
             mInjector.registerMinRefreshRateObserver(cr, this);
             cr.registerContentObserver(mLowPowerModeSetting, /* notifyDescendants= */ false, this,
                     UserHandle.USER_ALL);
+            cr.registerContentObserver(mBatterySaverRefreshRateCapSetting,
+                    /* notifyDescendants= */ false, this, UserHandle.USER_ALL);
             cr.registerContentObserver(mMatchContentFrameRateSetting,
                     /* notifyDescendants= */ false, this, UserHandle.USER_ALL);
             mInjector.registerDisplayListener(mDisplayListener, mHandler);
@@ -1068,7 +1072,8 @@ public class DisplayModeDirector {
             synchronized (mLock) {
                 if (mPeakRefreshRateSetting.equals(uri) || mMinRefreshRateSetting.equals(uri)) {
                     updateRefreshRateSettingLocked();
-                } else if (mLowPowerModeSetting.equals(uri)) {
+                } else if (mLowPowerModeSetting.equals(uri)
+                        || mBatterySaverRefreshRateCapSetting.equals(uri)) {
                     updateLowPowerModeSettingLocked();
                 } else if (mMatchContentFrameRateSetting.equals(uri)) {
                     updateModeSwitchingTypeSettingLocked();
@@ -1113,7 +1118,18 @@ public class DisplayModeDirector {
                     Settings.Global.LOW_POWER_MODE, 0 /*default*/) != 0;
             final Vote vote;
             if (mIsLowPower) {
-                vote = Vote.forRenderFrameRates(0f, 60f);
+                // Check user's refresh rate cap preference:
+                // 0 = no limit, otherwise the value is the Hz cap (60, 90, 120, etc.)
+                int refreshRateCap = Settings.Global.getInt(mContext.getContentResolver(),
+                        Settings.Global.BATTERY_SAVER_REFRESH_RATE_CAP, 60);
+                if (refreshRateCap <= 0) {
+                    // No limit or invalid value - don't apply refresh rate restriction
+                    vote = null;
+                } else {
+                    // Clamp to reasonable range (max 240Hz for future displays)
+                    refreshRateCap = Math.min(refreshRateCap, 240);
+                    vote = Vote.forRenderFrameRates(0f, (float) refreshRateCap);
+                }
             } else {
                 vote = null;
             }

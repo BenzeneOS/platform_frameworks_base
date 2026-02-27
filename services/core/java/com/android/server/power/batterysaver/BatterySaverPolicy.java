@@ -490,27 +490,78 @@ public class BatterySaverPolicy extends ContentObserver implements
             locationMode = rawPolicy.locationMode;
         }
 
+        // Apply user overrides from Settings.Global
+        final android.content.ContentResolver resolver = mContext.getContentResolver();
+
+        // Display features
+        boolean disableAnimation = rawPolicy.disableAnimation
+                && Settings.Global.getInt(resolver, Settings.Global.BATTERY_SAVER_ALLOW_ANIMATION, 0) != 1;
+        boolean disableAod = rawPolicy.disableAod
+                && Settings.Global.getInt(resolver, Settings.Global.BATTERY_SAVER_ALLOW_AOD, 0) != 1;
+        boolean enableNightMode = rawPolicy.enableNightMode
+                && Settings.Global.getInt(resolver, Settings.Global.BATTERY_SAVER_ALLOW_NIGHT_MODE_OFF, 0) != 1;
+        boolean enableAdjustBrightness = rawPolicy.enableAdjustBrightness
+                && Settings.Global.getInt(resolver, Settings.Global.BATTERY_SAVER_ALLOW_BRIGHTNESS, 0) != 1;
+
+        // Performance features
+        boolean disableLaunchBoost = rawPolicy.disableLaunchBoost
+                && Settings.Global.getInt(resolver, Settings.Global.BATTERY_SAVER_ALLOW_LAUNCH_BOOST, 0) != 1;
+        boolean forceAllAppsStandby = rawPolicy.forceAllAppsStandby
+                && Settings.Global.getInt(resolver, Settings.Global.BATTERY_SAVER_ALLOW_STANDBY, 0) != 1;
+        boolean forceBackgroundCheck = rawPolicy.forceBackgroundCheck
+                && Settings.Global.getInt(resolver, Settings.Global.BATTERY_SAVER_ALLOW_BACKGROUND, 0) != 1;
+        boolean enableQuickDoze = rawPolicy.enableQuickDoze
+                && Settings.Global.getInt(resolver, Settings.Global.BATTERY_SAVER_DISABLE_QUICK_DOZE, 0) != 1;
+
+        // Network features
+        boolean enableFirewall = rawPolicy.enableFirewall
+                && Settings.Global.getInt(resolver, Settings.Global.BATTERY_SAVER_ALLOW_NETWORK, 0) != 1;
+        boolean enableDataSaver = rawPolicy.enableDataSaver
+                && Settings.Global.getInt(resolver, Settings.Global.BATTERY_SAVER_ALLOW_DATA, 0) != 1;
+
+        // Sensors features
+        boolean disableVibration = rawPolicy.disableVibration
+                && Settings.Global.getInt(resolver, Settings.Global.BATTERY_SAVER_ALLOW_VIBRATION, 0) != 1;
+        int soundTriggerMode = rawPolicy.soundTriggerMode;
+        if (Settings.Global.getInt(resolver, Settings.Global.BATTERY_SAVER_ALLOW_SOUNDTRIGGER, 0) == 1) {
+            soundTriggerMode = PowerManager.SOUND_TRIGGER_MODE_ALL_ENABLED;
+        }
+        boolean disableOptionalSensors = rawPolicy.disableOptionalSensors
+                && Settings.Global.getInt(resolver, Settings.Global.BATTERY_SAVER_ALLOW_SENSORS, 0) != 1;
+
+        // Background tasks
+        boolean deferFullBackup = rawPolicy.deferFullBackup
+                && Settings.Global.getInt(resolver, Settings.Global.BATTERY_SAVER_ALLOW_FULL_BACKUP, 0) != 1;
+        boolean deferKeyValueBackup = rawPolicy.deferKeyValueBackup
+                && Settings.Global.getInt(resolver, Settings.Global.BATTERY_SAVER_ALLOW_KV_BACKUP, 0) != 1;
+
+        // Location
+        int effectiveLocationMode = locationMode;
+        if (Settings.Global.getInt(resolver, Settings.Global.BATTERY_SAVER_ALLOW_LOCATION, 0) == 1) {
+            effectiveLocationMode = PowerManager.LOCATION_MODE_NO_CHANGE;
+        }
+
         mEffectivePolicyRaw = new Policy(
                 rawPolicy.adjustBrightnessFactor,
                 rawPolicy.advertiseIsEnabled,
-                rawPolicy.deferFullBackup,
-                rawPolicy.deferKeyValueBackup,
-                rawPolicy.disableAnimation,
-                rawPolicy.disableAod,
-                rawPolicy.disableLaunchBoost,
-                rawPolicy.disableOptionalSensors,
+                deferFullBackup,
+                deferKeyValueBackup,
+                disableAnimation,
+                disableAod,
+                disableLaunchBoost,
+                disableOptionalSensors,
                 // Don't disable vibration when accessibility is on.
-                rawPolicy.disableVibration && !mAccessibilityEnabled.get(),
-                rawPolicy.enableAdjustBrightness,
-                rawPolicy.enableDataSaver,
-                rawPolicy.enableFirewall,
+                disableVibration && !mAccessibilityEnabled.get(),
+                enableAdjustBrightness,
+                enableDataSaver,
+                enableFirewall,
                 // Don't force night mode when car projection is enabled.
-                rawPolicy.enableNightMode && !mAutomotiveProjectionActive.get(),
-                rawPolicy.enableQuickDoze,
-                rawPolicy.forceAllAppsStandby,
-                rawPolicy.forceBackgroundCheck,
-                locationMode,
-                rawPolicy.soundTriggerMode
+                enableNightMode && !mAutomotiveProjectionActive.get(),
+                enableQuickDoze,
+                forceAllAppsStandby,
+                forceBackgroundCheck,
+                effectiveLocationMode,
+                soundTriggerMode
         );
 
 

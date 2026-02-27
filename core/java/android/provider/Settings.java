@@ -14309,6 +14309,29 @@ public final class Settings {
         @Protected(readWrite = KnownSystemPackage.SETTINGS)
         public static final String BATTERY_SPOOF_LEVEL = "battery_spoof_level";
 
+        // Battery saver customization options
+        /** @hide */ public static final String BATTERY_SAVER_ALLOW_ANIMATION = "battery_saver_allow_animation";
+        /** @hide */ public static final String BATTERY_SAVER_REFRESH_RATE_CAP = "battery_saver_refresh_rate_cap";
+        /** @hide */ public static final String BATTERY_SAVER_ALLOW_BLUR = "battery_saver_allow_blur";
+        /** @hide */ public static final String BATTERY_SAVER_ALLOW_HBM = "battery_saver_allow_hbm";
+        /** @hide */ public static final String BATTERY_SAVER_ALLOW_AOD = "battery_saver_allow_aod";
+        /** @hide */ public static final String BATTERY_SAVER_ALLOW_NIGHT_MODE_OFF = "battery_saver_allow_night_mode_off";
+        /** @hide */ public static final String BATTERY_SAVER_ALLOW_BRIGHTNESS = "battery_saver_allow_brightness";
+        /** @hide */ public static final String BATTERY_SAVER_ALLOW_LAUNCH_BOOST = "battery_saver_allow_launch_boost";
+        /** @hide */ public static final String BATTERY_SAVER_ALLOW_STANDBY = "battery_saver_allow_standby";
+        /** @hide */ public static final String BATTERY_SAVER_ALLOW_BACKGROUND = "battery_saver_allow_background";
+        /** @hide */ public static final String BATTERY_SAVER_DISABLE_QUICK_DOZE = "battery_saver_disable_quick_doze";
+        /** @hide */ public static final String BATTERY_SAVER_ALLOW_NETWORK = "battery_saver_allow_network";
+        /** @hide */ public static final String BATTERY_SAVER_ALLOW_DATA = "battery_saver_allow_data";
+        /** @hide */ public static final String BATTERY_SAVER_ALLOW_VIBRATION = "battery_saver_allow_vibration";
+        /** @hide */ public static final String BATTERY_SAVER_ALLOW_SOUNDTRIGGER = "battery_saver_allow_soundtrigger";
+        /** @hide */ public static final String BATTERY_SAVER_ALLOW_SENSORS = "battery_saver_allow_sensors";
+        /** @hide */ public static final String BATTERY_SAVER_ALLOW_ATTENTION = "battery_saver_allow_attention";
+        /** @hide */ public static final String BATTERY_SAVER_ALLOW_CAMERA_ROTATE = "battery_saver_allow_camera_rotate";
+        /** @hide */ public static final String BATTERY_SAVER_ALLOW_FULL_BACKUP = "battery_saver_allow_full_backup";
+        /** @hide */ public static final String BATTERY_SAVER_ALLOW_KV_BACKUP = "battery_saver_allow_kv_backup";
+        /** @hide */ public static final String BATTERY_SAVER_ALLOW_LOCATION = "battery_saver_allow_location";
+
         // ExtSettings END
 
         // NOTE: If you add new settings here, be sure to add them to

@@ -674,6 +674,8 @@ class HighBrightnessModeController {
     private final class SettingsObserver extends ContentObserver {
         private final Uri mLowPowerModeSetting = Settings.Global.getUriFor(
                 Settings.Global.LOW_POWER_MODE);
+        private final Uri mAllowHbmSetting = Settings.Global.getUriFor(
+                Settings.Global.BATTERY_SAVER_ALLOW_HBM);
         private boolean mStarted;
 
         SettingsObserver(Handler handler) {
@@ -688,6 +690,8 @@ class HighBrightnessModeController {
         void startObserving() {
             if (!mStarted) {
                 mContext.getContentResolver().registerContentObserver(mLowPowerModeSetting,
+                        false /*notifyForDescendants*/, this, UserHandle.USER_ALL);
+                mContext.getContentResolver().registerContentObserver(mAllowHbmSetting,
                         false /*notifyForDescendants*/, this, UserHandle.USER_ALL);
                 mStarted = true;
                 updateLowPower();
@@ -704,13 +708,19 @@ class HighBrightnessModeController {
 
         private void updateLowPower() {
             final boolean isLowPowerMode = isLowPowerMode();
-            if (isLowPowerMode == mIsBlockedByLowPowerMode) {
+            // Check if user allows HBM during battery saver
+            boolean allowHbm = Settings.Global.getInt(
+                    mContext.getContentResolver(), Settings.Global.BATTERY_SAVER_ALLOW_HBM, 0) == 1;
+            boolean shouldBlock = isLowPowerMode && !allowHbm;
+
+            if (shouldBlock == mIsBlockedByLowPowerMode) {
                 return;
             }
             if (DEBUG) {
-                Slog.d(TAG, "Settings.Global.LOW_POWER_MODE enabled: " + isLowPowerMode);
+                Slog.d(TAG, "Settings.Global.LOW_POWER_MODE enabled: " + isLowPowerMode
+                        + ", allowHbm: " + allowHbm);
             }
-            mIsBlockedByLowPowerMode = isLowPowerMode;
+            mIsBlockedByLowPowerMode = shouldBlock;
             // this recalculates HbmMode and runs mHbmChangeCallback if the mode has changed
             updateHbmMode();
         }
