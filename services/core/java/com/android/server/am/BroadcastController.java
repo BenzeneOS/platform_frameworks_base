@@ -77,6 +77,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.ActivityInfo;
 import android.content.pm.ApplicationInfo;
+import android.content.pm.GosPackageState;
 import android.content.pm.IPackageManager;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
@@ -85,6 +86,7 @@ import android.media.audiofx.AudioEffect;
 import android.net.ConnectivityManager;
 import android.net.Proxy;
 import android.net.Uri;
+import android.os.BatteryManager;
 import android.os.Binder;
 import android.os.BinderProxy;
 import android.os.Build;
@@ -532,7 +534,7 @@ class BroadcastController {
         Intent sticky = allSticky != null ? allSticky.get(0).intent : null;
         if (DEBUG_BROADCAST) Slog.v(TAG_BROADCAST, "Register receiver " + filter + ": " + sticky);
         if (receiver == null) {
-            return sticky;
+            return maybeSpoofBatteryIntent(sticky, callingUid, userId);
         }
 
         // SafetyNet logging for b/177931370. If any process other than system_server tries to
@@ -566,7 +568,7 @@ class BroadcastController {
                     try {
                         receiver.asBinder().linkToDeath(rl, 0);
                     } catch (RemoteException e) {
-                        return sticky;
+                        return maybeSpoofBatteryIntent(sticky, callingUid, userId);
                     }
                     rl.linkedToDeath = true;
                 }
@@ -635,7 +637,7 @@ class BroadcastController {
                 }
             }
 
-            return sticky;
+            return maybeSpoofBatteryIntent(sticky, callingUid, userId);
         }
     }
 
@@ -2562,6 +2564,62 @@ class BroadcastController {
         mService.mHandler.getLooper().dumpDebug(proto,
                 ActivityManagerServiceDumpBroadcastsProto.MainHandler.LOOPER);
         proto.end(handlerToken);
+    }
+
+    /**
+     * If the intent is ACTION_BATTERY_CHANGED and the caller has battery spoofing configured,
+     * returns a modified copy of the intent with the spoofed battery level.
+     * Otherwise returns the original intent unchanged.
+     *
+     * Per-app spoofedBatteryLevel values:
+     *   -1 = use global setting
+     *   -2 = force real battery (override global)
+     *   0-100 = custom override
+     */
+    private Intent maybeSpoofBatteryIntent(Intent intent, int callingUid, int userId) {
+        if (intent == null) {
+            return null;
+        }
+
+        // Only spoof ACTION_BATTERY_CHANGED
+        if (!Intent.ACTION_BATTERY_CHANGED.equals(intent.getAction())) {
+            return intent;
+        }
+
+        // Don't spoof for system apps
+        if (callingUid < Process.FIRST_APPLICATION_UID) {
+            return intent;
+        }
+
+        // Get the package name for the calling UID
+        String packageName = mService.getPackageManagerInternal().getNameForUid(callingUid);
+        if (packageName == null) {
+            return intent;
+        }
+
+        GosPackageState ps = GosPackageState.get(packageName, userId);
+        int perAppLevel = (ps != null && !ps.isNone()) ? ps.spoofedBatteryLevel : -1;
+
+        int spoofedLevel;
+        if (perAppLevel == -2) {
+            // Force real battery (override global)
+            return intent;
+        } else if (perAppLevel >= 0) {
+            // Custom per-app override
+            spoofedLevel = perAppLevel;
+        } else {
+            // Use global setting (-1 = use global)
+            spoofedLevel = android.ext.settings.ExtSettings.BATTERY_SPOOF_LEVEL.get(mContext);
+        }
+
+        if (spoofedLevel < 0) {
+            return intent;
+        }
+
+        // Clone the intent and modify the battery level
+        Intent spoofedIntent = new Intent(intent);
+        spoofedIntent.putExtra(BatteryManager.EXTRA_LEVEL, spoofedLevel);
+        return spoofedIntent;
     }
 
     @VisibleForTesting

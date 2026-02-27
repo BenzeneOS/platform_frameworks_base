@@ -36,6 +36,7 @@ import android.app.BroadcastOptions;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.GosPackageState;
 import android.content.pm.PackageManager;
 import android.content.pm.PackageManagerInternal;
 import android.content.pm.ResolveInfo;
@@ -1862,11 +1863,64 @@ public final class BatteryService extends SystemService {
                     break;
             }
 
+            // Check for battery level spoofing
+            if (id == BatteryManager.BATTERY_PROPERTY_CAPACITY) {
+                int spoofedLevel = getSpoofedBatteryLevelForCaller();
+                if (spoofedLevel >= 0) {
+                    prop.setLong(spoofedLevel);
+                    return 0; // success
+                }
+            }
+
             return mHealthServiceWrapper.getProperty(id, prop);
         }
         @Override
         public void scheduleUpdate() throws RemoteException {
             mHealthServiceWrapper.scheduleUpdate();
+        }
+    }
+
+    /**
+     * Returns the spoofed battery level for the calling app, or -1 if no spoofing is configured.
+     * System apps are never spoofed.
+     *
+     * Per-app spoofedBatteryLevel values:
+     *   -1 = use global setting
+     *   -2 = force real battery (override global)
+     *   0-100 = custom override
+     */
+    private int getSpoofedBatteryLevelForCaller() {
+        int callingUid = Binder.getCallingUid();
+
+        // Don't spoof for system apps
+        if (callingUid < Process.FIRST_APPLICATION_UID) {
+            return -1;
+        }
+
+        // Get the package name for the calling UID
+        PackageManagerInternal pmi = LocalServices.getService(PackageManagerInternal.class);
+        if (pmi == null) {
+            return -1;
+        }
+
+        String packageName = pmi.getNameForUid(callingUid);
+        if (packageName == null) {
+            return -1;
+        }
+        int userId = UserHandle.getUserId(callingUid);
+
+        GosPackageState ps = GosPackageState.get(packageName, userId);
+        int perAppLevel = (ps != null && !ps.isNone()) ? ps.spoofedBatteryLevel : -1;
+
+        if (perAppLevel == -2) {
+            // Force real battery (override global)
+            return -1;
+        } else if (perAppLevel >= 0) {
+            // Custom per-app override
+            return perAppLevel;
+        } else {
+            // Use global setting (-1 = use global)
+            return android.ext.settings.ExtSettings.BATTERY_SPOOF_LEVEL.get(mContext);
         }
     }
 
