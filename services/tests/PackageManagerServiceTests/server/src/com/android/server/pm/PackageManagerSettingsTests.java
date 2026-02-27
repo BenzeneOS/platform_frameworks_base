@@ -1509,7 +1509,8 @@ public class PackageManagerSettingsTests {
         // argument values are random
         return new GosPackageState(0xf0_bc_06_f1_f1_67_2e_b8L, 0xf4_93_53_00_98_c8_f0_0cL,
                 hf.parseHex("2d f6 37 f2 90 39 da ef"),
-                hf.parseHex("8b 9d 61 a3 3e 45 12")
+                hf.parseHex("8b 9d 61 a3 3e 45 12"),
+                75 // spoofedBatteryLevel
         );
     }
 
