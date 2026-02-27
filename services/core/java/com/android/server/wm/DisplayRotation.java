@@ -2056,10 +2056,17 @@ public class DisplayRotation {
 
         @Override
         public boolean isRotationResolverEnabled() {
+            // Check if user allows camera rotation during battery saver
+            boolean allowCameraRotate = android.provider.Settings.Global.getInt(
+                    mContext.getContentResolver(),
+                    android.provider.Settings.Global.BATTERY_SAVER_ALLOW_CAMERA_ROTATE, 0) == 1;
+            boolean disabledByPowerSave = mService.mPowerManager.isPowerSaveMode()
+                    && !allowCameraRotate;
+
             return mAllowRotationResolver
                     && mUserRotationMode == WindowManagerPolicy.USER_ROTATION_FREE
                     && mCameraRotationMode == CAMERA_ROTATION_ENABLED
-                    && !mService.mPowerManager.isPowerSaveMode();
+                    && !disabledByPowerSave;
         }
 
 
