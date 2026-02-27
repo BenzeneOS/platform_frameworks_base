@@ -298,6 +298,9 @@ public class SystemSettingsValidators {
         VALIDATORS.put(System.DOUBLE_TAP_SLEEP_STATUS_BAR, BOOLEAN_VALIDATOR);
         VALIDATORS.put(System.DOUBLE_TAP_SLEEP_LOCKSCREEN, BOOLEAN_VALIDATOR);
         VALIDATORS.put(System.VOLUME_WAKE_SCREEN, BOOLEAN_VALIDATOR);
+        VALIDATORS.put(System.LONG_PRESS_POWER_ACTION, new InclusiveIntegerRangeValidator(0, 3));
+        VALIDATORS.put(System.TORCH_LONG_PRESS_POWER_TIMEOUT,
+                new InclusiveIntegerRangeValidator(0, 600));
         VALIDATORS.put(System.STATUS_BAR_AM_PM, new InclusiveIntegerRangeValidator(0, 2));
         VALIDATORS.put(System.STATUS_BAR_CLOCK, new InclusiveIntegerRangeValidator(0, 3));
         VALIDATORS.put(System.VOLBTN_MUSIC_CONTROLS, BOOLEAN_VALIDATOR);
