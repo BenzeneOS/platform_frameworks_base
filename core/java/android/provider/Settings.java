@@ -7385,6 +7385,29 @@ public final class Settings {
         public static final String VOLUME_WAKE_SCREEN = "volume_wake_screen";
 
         /**
+         * Action for long press power button when screen is off or dozing.
+         * 0 = nothing (disabled), 1 = toggle flashlight, 2 = play/pause music, 3 = launch camera
+         * @hide
+         */
+        public static final String LONG_PRESS_POWER_ACTION = "long_press_power_action";
+
+        /** @hide */
+        public static final int LONG_PRESS_POWER_ACTION_NOTHING = 0;
+        /** @hide */
+        public static final int LONG_PRESS_POWER_ACTION_FLASHLIGHT = 1;
+        /** @hide */
+        public static final int LONG_PRESS_POWER_ACTION_PLAY_PAUSE = 2;
+        /** @hide */
+        public static final int LONG_PRESS_POWER_ACTION_CAMERA = 3;
+
+        /**
+         * Timeout for torch when activated via long press power (in seconds).
+         * 0 = no timeout
+         * @hide
+         */
+        public static final String TORCH_LONG_PRESS_POWER_TIMEOUT = "torch_long_press_power_timeout";
+
+        /**
          * Volume button music controls when screen off.
          * @hide
          */
