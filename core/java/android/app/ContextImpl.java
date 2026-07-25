@@ -124,6 +124,8 @@ import com.android.internal.gmscompat.IGmsCompatLib;
 import com.android.internal.gmscompat.sysservice.GmcPackageManager;
 import com.android.internal.gmscompat.GmsHooks;
 import com.android.internal.gmscompat.sysservice.GmcUserManager;
+import com.android.internal.pushcompat.PushCompatHooks;
+import com.android.internal.pushcompat.PushCompatPackageManager;
 import com.android.internal.util.Preconditions;
 
 import dalvik.system.BlockGuard;
@@ -477,9 +479,13 @@ class ContextImpl extends Context {
     private PackageManager getPackageManagerInner() {
         final IPackageManager pm = ActivityThread.getPackageManager();
         if (pm != null) {
-            return GmsCompat.isEnabled() ?
-                    new GmcPackageManager(this, pm) :
-                    new ApplicationPackageManager(this, pm);
+            if (GmsCompat.isEnabled()) {
+                return new GmcPackageManager(this, pm);
+            }
+            if (PushCompatHooks.shouldSpoofGmsAvailability()) {
+                return new PushCompatPackageManager(this, pm);
+            }
+            return new ApplicationPackageManager(this, pm);
         }
         return null;
     }

@@ -527,6 +527,7 @@ import com.android.server.crashrecovery.CrashRecoveryHelper;
 import com.android.server.criticalevents.CriticalEventLog;
 import com.android.server.ext.DynCodeLoadingUtils;
 import com.android.server.ext.PackageManagerHooks;
+import com.android.server.ext.SystemServerExt;
 import com.android.server.firewall.IntentFirewall;
 import com.android.server.graphics.fonts.FontManagerInternal;
 import com.android.server.job.JobSchedulerInternal;
@@ -21384,5 +21385,17 @@ public class ActivityManagerService extends IActivityManager.Stub
     @Override
     public void setThreeGestureStateActive(boolean active) {
         mThreeFingerGestureActive = active;
+    }
+
+    @Override
+    public boolean deliverPushCompatToken(int userId, String packageName, String token) {
+        return SystemServerExt.deliverPushCompatToken(userId, packageName, token);
+    }
+
+    @Override
+    public boolean deliverUnifiedPushConnectorIntent(int userId, String packageName, String action,
+            Bundle extras) {
+        return SystemServerExt.deliverUnifiedPushConnectorIntent(
+                userId, packageName, action, extras);
     }
 }

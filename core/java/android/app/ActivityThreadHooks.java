@@ -15,6 +15,7 @@ import com.android.internal.app.ContactScopes;
 import com.android.internal.app.GservicesFlags;
 import com.android.internal.app.StorageScopesAppHooks;
 import com.android.internal.gmscompat.GmsHooks;
+import com.android.internal.pushcompat.PushCompatHooks;
 import com.android.internal.util.Preconditions;
 
 import java.util.Objects;
@@ -55,6 +56,8 @@ class ActivityThreadHooks {
             }
             GservicesFlags.enable();
         }
+
+        PushCompatHooks.setFlags(flags[AppBindArgs.FLAGS_IDX_PUSH_COMPAT]);
 
         return args;
     }

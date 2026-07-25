@@ -20,6 +20,7 @@ import android.util.Slog;
 
 import com.android.internal.app.ContactScopes;
 import com.android.internal.app.GservicesFlags;
+import com.android.internal.pushcompat.PushCompatHooks;
 import com.android.server.pm.Computer;
 import com.android.server.pm.GosPackageStatePmHooks;
 import com.android.server.pm.ext.PackageExt;
@@ -125,6 +126,10 @@ public class PackageManagerHooks {
                 android.ext.dcl.DynCodeLoading.getAppBindFlags(context, userId, appInfo, unfilteredGosPs);
         flagsArr[AppBindArgs.FLAGS_IDX_GSERVICES_FLAGS_REDIRECT] =
                 getGservicesFlagsRedirectFlag(pmComputer, appInfo, appUid, userId);
+
+        // PUSH_COMPAT_RELAY is not readable by the app itself, so it rides the unfiltered array
+        flagsArr[AppBindArgs.FLAGS_IDX_PUSH_COMPAT] =
+                PushCompatHooks.getFlags(unfilteredGosPs);
 
         var b = new Bundle();
         b.putParcelable(AppBindArgs.KEY_GOS_PACKAGE_STATE, gosPs);

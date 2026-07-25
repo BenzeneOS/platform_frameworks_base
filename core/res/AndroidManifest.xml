@@ -875,6 +875,10 @@
     <!-- Added in 26Q4 -->
     <protected-broadcast android:name="android.app.action.DYNAMIC_BUNDLE_MODIFIED" />
     <protected-broadcast android:name="android.app.action.BRIDGED_NOTIFICATION_PREFERENCES" />
+    <protected-broadcast android:name="org.unifiedpush.android.connector.NEW_ENDPOINT" />
+    <protected-broadcast android:name="org.unifiedpush.android.connector.REGISTRATION_FAILED" />
+    <protected-broadcast android:name="org.unifiedpush.android.connector.UNREGISTERED" />
+    <protected-broadcast android:name="org.unifiedpush.android.connector.MESSAGE" />
 
     <!-- ====================================================================== -->
     <!--                          RUNTIME PERMISSIONS                           -->

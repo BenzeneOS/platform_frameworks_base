@@ -2,7 +2,9 @@ package com.android.server.ext;
 
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.content.pm.PackageManagerInternal;
 import android.os.Build;
+import android.os.Bundle;
 import android.os.Handler;
 import android.system.ErrnoException;
 import android.system.Os;
@@ -12,20 +14,29 @@ import android.util.Slog;
 
 import com.android.internal.os.BackgroundThread;
 import com.android.internal.os.SELinuxFlags;
+import com.android.server.LocalServices;
 import com.android.server.pm.PackageManagerService;
+import com.android.server.pm.UserManagerInternal;
 
 import dalvik.system.VMRuntime;
 
 public final class SystemServerExt {
 
+    private static volatile SystemServerExt instance;
+
     public final Context context;
     public final Handler bgHandler;
     public final PackageManagerService packageManager;
+    private final PushCompatBroker pushCompatBroker;
 
     private SystemServerExt(Context systemContext, PackageManagerService pm) {
         context = systemContext;
         bgHandler = BackgroundThread.getHandler();
         packageManager = pm;
+        pushCompatBroker = new PushCompatBroker(
+                systemContext,
+                LocalServices.getService(PackageManagerInternal.class),
+                LocalServices.getService(UserManagerInternal.class));
     }
 
     /*
@@ -37,9 +48,20 @@ public final class SystemServerExt {
      */
     public static void init(Context systemContext, PackageManagerService pm) {
         SystemServerExt sse = new SystemServerExt(systemContext, pm);
+        instance = sse;
         sse.bgHandler.post(sse::initBgThread);
 
         AppCompatConf.init(systemContext);
+    }
+
+    public static boolean deliverPushCompatToken(int userId, String packageName, String token) {
+        return instance.pushCompatBroker.deliverToken(userId, packageName, token);
+    }
+
+    public static boolean deliverUnifiedPushConnectorIntent(int userId, String packageName,
+            String action, Bundle extras) {
+        return instance.pushCompatBroker.deliverUnifiedPushConnectorIntent(
+                userId, packageName, action, extras);
     }
 
     void initBgThread() {

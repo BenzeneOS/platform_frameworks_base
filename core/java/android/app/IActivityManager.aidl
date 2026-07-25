@@ -1074,4 +1074,8 @@ interface IActivityManager {
     boolean isThreeFingersSwipeActive();
     void setThreeFingersSwipeActive(boolean active);
     void setThreeGestureStateActive(boolean active);
+
+    boolean deliverPushCompatToken(int userId, String packageName, String token);
+    boolean deliverUnifiedPushConnectorIntent(int userId, String packageName, String action,
+            in Bundle extras);
 }

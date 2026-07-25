@@ -10,6 +10,7 @@ public interface AppBindArgs {
     int FLAGS_IDX_HOOKED_LOCATION_MANAGER = 1;
     int FLAGS_IDX_DYN_CODE_LOADING = 2;
     int FLAGS_IDX_GSERVICES_FLAGS_REDIRECT = 3;
+    int FLAGS_IDX_PUSH_COMPAT = 4;
 
     int FLAGS_ARRAY_LEN = 10;
 }

@@ -280,6 +280,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.ApplicationInfo;
+import android.content.pm.GosPackageStateFlag;
 import android.content.pm.IPackageManager;
 import android.content.pm.LauncherApps;
 import android.content.pm.ModuleInfo;
@@ -9486,8 +9487,24 @@ public class NotificationManagerService extends SystemService {
             channelId = (new Notification.TvExtender(notification)).getChannelId();
         }
         String shortcutId = n.getShortcutId();
-        final NotificationChannel channel = getNotificationChannelRestoreDeleted(pkg,
+        NotificationChannel channel = getNotificationChannelRestoreDeleted(pkg,
                 callingUid, notificationUid, channelId, shortcutId);
+        if (channel == null && !TextUtils.isEmpty(channelId) && mPackageManagerInternal
+                .getGosPackageState(pkg, UserHandle.getUserId(notificationUid))
+                .hasFlag(GosPackageStateFlag.PUSH_COMPAT_RELAY)) {
+            final NotificationChannel relayChannel =
+                    new NotificationChannel(channelId, channelId, IMPORTANCE_DEFAULT);
+            final boolean needsPolicyFileChange = mPreferencesHelper.createNotificationChannel(
+                    pkg, notificationUid, relayChannel, true /* fromTargetApp */,
+                    mConditionProviders.isPackageOrComponentAllowed(
+                            pkg, UserHandle.getUserId(notificationUid)),
+                    callingUid, true /* callerIsSystemOrSystemUi */);
+            if (needsPolicyFileChange) {
+                handleSavePolicyFile();
+            }
+            channel = getNotificationChannelRestoreDeleted(pkg, callingUid,
+                    notificationUid, channelId, shortcutId);
+        }
         if (channel == null) {
             final String noChannelStr = "No Channel found for "
                     + "pkg=" + pkg
