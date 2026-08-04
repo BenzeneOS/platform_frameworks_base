@@ -366,6 +366,7 @@ enum RuntimeFlags : uint32_t {
 
 namespace ExtraArgsFlag {
     static const int FORCIBLY_ENABLE_MEMORY_TAGGING = 1 << 2;
+    static const int BENZENED_ROOT_GRANTED = 1 << 6;
 }
 
 struct ExtraArgs {
@@ -1825,6 +1826,38 @@ static void BindMountStorageDirs(JNIEnv* env, jobjectArray pkg_data_info_list,
 }
 
 // Utility routine to specialize a zygote child process.
+static constexpr const char* kBenzeneBinDir = "/mnt/benzene";
+static constexpr const char* kBenzeneSuSrc = "/system/bin/benzened_su_client";
+
+static void MountBenzeneSu(bool granted) {
+    if (!granted) {
+        return;
+    }
+
+    if (mkdir(kBenzeneBinDir, 0755) == -1 && errno != EEXIST) {
+        ALOGE("benzened: mkdir %s: %s", kBenzeneBinDir, strerror(errno));
+        return;
+    }
+
+    if (mount("benzene", kBenzeneBinDir, "tmpfs", MS_NOSUID | MS_NODEV,
+              "mode=0755,size=4k") == -1) {
+        ALOGE("benzened: mount tmpfs: %s", strerror(errno));
+        return;
+    }
+
+    std::string dst = std::string(kBenzeneBinDir) + "/su";
+    if (symlink(kBenzeneSuSrc, dst.c_str()) == -1) {
+        ALOGE("benzened: symlink su: %s", strerror(errno));
+        return;
+    }
+
+    const char* old_path = getenv("PATH");
+    std::string new_path = std::string(kBenzeneBinDir) + ":" + (old_path ? old_path : "");
+    if (setenv("PATH", new_path.c_str(), 1) == -1) {
+        ALOGE("benzened: setenv PATH: %s", strerror(errno));
+    }
+}
+
 static void SpecializeCommon(JNIEnv* env, ExtraArgs& extra_args, uid_t uid, gid_t gid, jintArray gids, jint runtime_flags,
                              jobjectArray rlimits, jlong permitted_capabilities,
                              jlong effective_capabilities, jlong bounding_capabilities,
@@ -1879,6 +1912,8 @@ static void SpecializeCommon(JNIEnv* env, ExtraArgs& extra_args, uid_t uid, gid_
 
     // Make sure app is running in its own mount namespace before isolating its data directories.
     ensureInAppMountNamespace(fail_fn);
+
+    MountBenzeneSu(extra_args.hasFlag(ExtraArgsFlag::BENZENED_ROOT_GRANTED));
 
     // Isolate app data, jit profile and sandbox data directories by overlaying a tmpfs on those
     // dirs and bind mount all related packages separately.

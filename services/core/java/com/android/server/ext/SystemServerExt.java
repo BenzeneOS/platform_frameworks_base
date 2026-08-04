@@ -51,6 +51,8 @@ public final class SystemServerExt {
         instance = sse;
         sse.bgHandler.post(sse::initBgThread);
 
+        BenzenedHooks.register(systemContext);
+
         AppCompatConf.init(systemContext);
     }
 

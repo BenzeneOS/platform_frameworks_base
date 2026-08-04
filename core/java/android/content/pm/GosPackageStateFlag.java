@@ -39,6 +39,10 @@ public interface GosPackageStateFlag {
     /** @hide */ int USE_EXEC_SPAWNING_NON_DEFAULT = 29;
     /** @hide */ int USE_EXEC_SPAWNING = 30;
     /** @hide */ int PUSH_COMPAT_RELAY = 31;
+    /** @hide */ int BENZENED_ROOT_NON_DEFAULT = 32;
+    /** @hide */ int BENZENED_ROOT = 33;
+    /** @hide */ int BENZENED_ROOT_UNRESTRICTED_NON_DEFAULT = 34;
+    /** @hide */ int BENZENED_ROOT_UNRESTRICTED = 35;
 
     /** @hide */
     @IntDef(value = {
@@ -70,6 +74,10 @@ public interface GosPackageStateFlag {
             USE_EXEC_SPAWNING_NON_DEFAULT,
             USE_EXEC_SPAWNING,
             PUSH_COMPAT_RELAY,
+            BENZENED_ROOT_NON_DEFAULT,
+            BENZENED_ROOT,
+            BENZENED_ROOT_UNRESTRICTED_NON_DEFAULT,
+            BENZENED_ROOT_UNRESTRICTED,
     })
     @Retention(RetentionPolicy.SOURCE)
     @interface Enum {}

@@ -64,6 +64,18 @@ class GosPackageStatePermission {
         return new GosPackageStatePermission(-1, -1, -1, -1, -1);
     }
 
+    private static final long BENZENED_ROOT_FLAGS =
+            (1L << GosPackageStateFlag.BENZENED_ROOT_NON_DEFAULT)
+            | (1L << GosPackageStateFlag.BENZENED_ROOT)
+            | (1L << GosPackageStateFlag.BENZENED_ROOT_UNRESTRICTED_NON_DEFAULT)
+            | (1L << GosPackageStateFlag.BENZENED_ROOT_UNRESTRICTED);
+
+    // A Standard root shell holds CAP_SETUID, so it can become the shell uid and
+    // edit its own grant through the package manager. Reads stay open.
+    static GosPackageStatePermission createFullExceptRootGrant() {
+        return new GosPackageStatePermission(-1, ~BENZENED_ROOT_FLAGS, -1, -1, -1);
+    }
+
     boolean canReadField(@Field int field) {
         return (readFields & (1 << field)) != 0;
     }

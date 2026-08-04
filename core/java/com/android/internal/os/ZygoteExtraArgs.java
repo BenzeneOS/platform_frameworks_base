@@ -5,6 +5,7 @@ import android.annotation.Nullable;
 import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.GosPackageState;
+import android.ext.settings.app.AswBenzenedRoot;
 import android.ext.settings.app.AswUseExecSpawning;
 import android.ext.settings.app.AswUseExtendedVaSpace;
 import android.ext.settings.app.AswUseHardenedMalloc;
@@ -43,6 +44,7 @@ public class ZygoteExtraArgs implements Parcelable {
         int USE_ZYGOTE_SPAWNING = 1 << 3;
         int PREFER_COMPAT_ZYGOTE = 1 << 4;
         int MANUALLY_RUN_ZYGOTE_PRELOAD = 1 << 5;
+        int BENZENED_ROOT_GRANTED = 1 << 6;
 
         @IntDef(flag = true, value = {
                 DISABLE_HARDENED_MALLOC,
@@ -50,6 +52,7 @@ public class ZygoteExtraArgs implements Parcelable {
                 FORCIBLY_ENABLE_MEMORY_TAGGING,
                 PREFER_COMPAT_ZYGOTE,
                 MANUALLY_RUN_ZYGOTE_PRELOAD,
+                BENZENED_ROOT_GRANTED,
         })
         @Retention(RetentionPolicy.SOURCE)
         @interface Enum {}
@@ -91,6 +94,8 @@ public class ZygoteExtraArgs implements Parcelable {
             res.setFlag(Flag.ENABLE_COMPAT_VA_39_BIT, !AswUseExtendedVaSpace.I.get(ctx, userId, appInfo, ps));
         }
         res.setFlag(Flag.FORCIBLY_ENABLE_MEMORY_TAGGING, shouldForciblyEnableMemoryTagging);
+        res.setFlag(Flag.BENZENED_ROOT_GRANTED, !isIsolatedProcess
+                && AswBenzenedRoot.isEnabledFor(ctx, userId, appInfo, ps));
         return res;
     }
 
