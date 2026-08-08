@@ -59,6 +59,12 @@
          is not fully charged, say that it's charging.  -->
     <string name="keyguard_plugged_in"><xliff:g id="percentage">%s</xliff:g> • Charging</string>
 
+    <!-- Battery percentage and negotiated charging wattage shown in the lock screen charging indication. [CHAR LIMIT=20] -->
+    <string name="keyguard_battery_percentage_with_charging_wattage"><xliff:g id="percentage" example="45%">%1$s</xliff:g> • <xliff:g id="charging_wattage" example="15W">%2$s</xliff:g></string>
+
+    <!-- Negotiated charging wattage shown in the lock screen charging indication. [CHAR LIMIT=8] -->
+    <string name="keyguard_charging_wattage" translatable="false">%dW</string>
+
     <!-- When the lock screen is showing and the phone plugged in, and the battery
          is not fully charged, and it's plugged into a fast charger, say that it's charging fast.  -->
     <string name="keyguard_plugged_in_charging_fast"><xliff:g id="percentage">%s</xliff:g> • Charging rapidly</string>

@@ -10,7 +10,7 @@ public interface EnhancedEstimates {
     boolean isHybridNotificationEnabled();
 
     /**
-     * Returns an estimate object if the feature is enabled.
+     * Returns an estimate object.
      */
     Estimate getEstimate();
 

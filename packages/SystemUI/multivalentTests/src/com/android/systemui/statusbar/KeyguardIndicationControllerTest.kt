@@ -953,6 +953,37 @@ class KeyguardIndicationControllerTest : KeyguardIndicationControllerBaseTest() 
         verify(mIBatteryStats, never()).computeChargeTimeRemaining()
     }
 
+    @Test
+    fun onRefreshBatteryInfo_chargingWithWattage_presentsWattage() {
+        createController()
+        val status =
+            BatteryStatus(
+                BatteryManager.BATTERY_STATUS_CHARGING,
+                45, /* level */
+                BatteryManager.BATTERY_PLUGGED_AC,
+                BatteryManager.CHARGING_POLICY_DEFAULT,
+                25_000_000, /* maxChargingWattage */
+                true, /* present */
+            )
+
+        mController.getKeyguardCallback().onRefreshBatteryInfo(status)
+        mController.setVisible(true)
+
+        val percentageWithWattage =
+            mContext.getString(
+                R.string.keyguard_battery_percentage_with_charging_wattage,
+                NumberFormat.getPercentInstance().format(45 / 100f),
+                mContext.getString(R.string.keyguard_charging_wattage, 25),
+            )
+        verifyIndicationMessage(
+            KeyguardIndicationRotateTextViewController.INDICATION_TYPE_BATTERY,
+            mContext.getString(
+                R.string.keyguard_plugged_in_charging_fast,
+                percentageWithWattage,
+            ),
+        )
+    }
+
     /**
      * Regression test. We should not make calls to the system_process when updating the doze state.
      */

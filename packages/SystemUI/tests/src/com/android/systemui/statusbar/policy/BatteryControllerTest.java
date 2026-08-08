@@ -38,6 +38,7 @@ import android.os.BatteryManager;
 import android.os.Handler;
 import android.os.PowerManager;
 import android.os.PowerSaveState;
+import android.provider.Settings;
 import android.testing.AndroidTestingRunner;
 import android.testing.TestableLooper;
 
@@ -45,6 +46,8 @@ import androidx.test.filters.SmallTest;
 
 import com.android.dx.mockito.inline.extended.StaticInOrder;
 import com.android.settingslib.fuelgauge.BatterySaverUtils;
+import com.android.settingslib.fuelgauge.Estimate;
+import com.android.settingslib.fuelgauge.EstimateKt;
 import com.android.systemui.SysuiTestCase;
 import com.android.systemui.animation.Expandable;
 import com.android.systemui.broadcast.BroadcastDispatcher;
@@ -65,6 +68,7 @@ import org.mockito.MockitoSession;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 @SmallTest
 @RunWith(AndroidTestingRunner.class)
@@ -78,6 +82,7 @@ public class BatteryControllerTest extends SysuiTestCase {
     @Mock private UsbPort mUsbPort;
     @Mock private UsbManager mUsbManager;
     @Mock private UsbPortStatus mUsbPortStatus;
+    @Mock private EnhancedEstimates mEnhancedEstimates;
     private BatteryControllerImpl mBatteryController;
     private MockitoSession mMockitoSession;
 
@@ -90,7 +95,7 @@ public class BatteryControllerTest extends SysuiTestCase {
                 .startMocking();
 
         mBatteryController = new BatteryControllerImpl(getContext(),
-                mock(EnhancedEstimates.class),
+                mEnhancedEstimates,
                 mPowerManager,
                 mBroadcastDispatcher,
                 mDemoModeController,
@@ -214,6 +219,25 @@ public class BatteryControllerTest extends SysuiTestCase {
                 });
         TestableLooper.get(this).processAllMessages();
         // Should not throw an exception
+    }
+
+    @Test
+    public void testBatteryEstimateFetch_fetchesWhenHybridNotificationDisabled() {
+        Settings.Global.putLong(
+                getContext().getContentResolver(),
+                Settings.Global.BATTERY_ESTIMATES_LAST_UPDATE_TIME,
+                -1);
+        when(mEnhancedEstimates.getEstimate()).thenReturn(new Estimate(
+                2 * 60 * 60 * 1000,
+                false /* isBasedOnUsage */,
+                EstimateKt.AVERAGE_TIME_TO_DISCHARGE_UNKNOWN));
+        AtomicReference<String> estimate = new AtomicReference<>();
+
+        mBatteryController.getEstimatedTimeRemainingString(estimate::set);
+        TestableLooper.get(this).processAllMessages();
+
+        verify(mEnhancedEstimates).getEstimate();
+        assertThat(estimate.get()).isNotNull();
     }
 
     @Test

@@ -419,12 +419,9 @@ public class BatteryControllerImpl extends BroadcastReceiver implements BatteryC
 
         mFetchingEstimate = true;
         mBgHandler.post(() -> {
-            // Only fetch the estimate if they are enabled
             synchronized (mEstimateLock) {
                 mEstimate = null;
-                if (mEstimates.isHybridNotificationEnabled()) {
-                    updateEstimate();
-                }
+                updateEstimate();
             }
             mFetchingEstimate = false;
             mMainHandler.post(this::notifyEstimateFetchCallbacks);

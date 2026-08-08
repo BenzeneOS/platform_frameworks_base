@@ -1235,11 +1235,11 @@ public class KeyguardIndicationController {
      */
     protected String computePowerIndication() {
         if (mBatteryDefender) {
-            String percentage = NumberFormat.getPercentInstance().format(mBatteryLevel / 100f);
+            String percentage = getBatteryPercentage();
             return mContext.getResources().getString(
                     R.string.keyguard_plugged_in_charging_limited, percentage);
         } else if (mPowerPluggedIn && mIncompatibleCharger) {
-            String percentage = NumberFormat.getPercentInstance().format(mBatteryLevel / 100f);
+            String percentage = getBatteryPercentage();
             return mContext.getResources().getString(
                     R.string.keyguard_plugged_in_incompatible_charger, percentage);
         }
@@ -1250,7 +1250,8 @@ public class KeyguardIndicationController {
     protected String computePowerChargingStringIndication() {
         Context context = mContext;
         if (BatteryChargeLimit.isChargeLimitEnabled(context)) {
-            String percentage = NumberFormat.getPercentInstance().format(mBatteryLevel / 100f);
+            String percentage = getBatteryPercentage();
+            String percentageWithWattage = getBatteryPercentageWithChargingWattage();
             int chargeStopLevel = BatteryChargeLimit.getChargeStopLevel(context);
 
             if (mChargingTimeRemaining > 0 && mBatteryLevel < chargeStopLevel) {
@@ -1258,12 +1259,12 @@ public class KeyguardIndicationController {
                     String remainingTime = PowerUtil.getTargetTimeShortString(
                             context, mChargingTimeRemaining, System.currentTimeMillis());
                     return context.getString(R.string.keyguard_indication_charging_time_charge_limit,
-                            remainingTime, percentage);
+                            remainingTime, percentageWithWattage);
                 } else {
                     String remainingTime = Formatter.formatShortElapsedTimeRoundingUpToMinutes(
                             context, mChargingTimeRemaining);
                     return context.getString(R.string.keyguard_indication_charging_time_charge_limit_v1,
-                            remainingTime, percentage);
+                            remainingTime, percentageWithWattage);
                 }
             }
             if (mBatteryLevel >= chargeStopLevel) {
@@ -1276,7 +1277,7 @@ public class KeyguardIndicationController {
             return mContext.getResources().getString(R.string.keyguard_charged);
         }
 
-        String percentage = NumberFormat.getPercentInstance().format(mBatteryLevel / 100f);
+        String percentage = getBatteryPercentageWithChargingWattage();
         if (mBatteryDead) {
             return mContext.getResources().getString(R.string.keyguard_plugged_in, percentage);
         }
@@ -1323,6 +1324,35 @@ public class KeyguardIndicationController {
         } else {
             return mContext.getResources().getString(chargingId, percentage);
         }
+    }
+
+    private String getBatteryPercentage() {
+        return NumberFormat.getPercentInstance().format(mBatteryLevel / 100f);
+    }
+
+    private String getBatteryPercentageWithChargingWattage() {
+        String percentage = getBatteryPercentage();
+        String chargingWattage = getChargingWattageString();
+        if (chargingWattage == null) {
+            return percentage;
+        }
+        return mContext.getString(
+                R.string.keyguard_battery_percentage_with_charging_wattage,
+                percentage,
+                chargingWattage);
+    }
+
+    @Nullable
+    private String getChargingWattageString() {
+        if (mChargingWattage <= 0) {
+            return null;
+        }
+
+        int chargingWatts = Math.round(mChargingWattage / 1_000_000f);
+        if (chargingWatts <= 0) {
+            return null;
+        }
+        return mContext.getString(R.string.keyguard_charging_wattage, chargingWatts);
     }
 
     public void setStatusBarKeyguardViewManager(
