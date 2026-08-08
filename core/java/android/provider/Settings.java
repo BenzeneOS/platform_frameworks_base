@@ -12126,6 +12126,45 @@ public final class Settings {
         @android.provider.Settings.Readable
         public static final String DUAL_SHADE = "dual_shade";
 
+        /**
+         * Controls the shape used for Quick Settings tiles.
+         * <p>
+         * Type: int (0 for both shapes depending on tile state, 1 for always rounded,
+         * 2 for always square)
+         *
+         * @hide
+         */
+        @Readable
+        public static final String QS_TILE_SHAPE = "qs_tile_shape";
+
+        /**
+         * Use both rounded and square Quick Settings tile shapes based on tile state.
+         *
+         * @hide
+         */
+        public static final int QS_TILE_SHAPE_BOTH = 0;
+
+        /**
+         * Always use the rounded Quick Settings tile shape.
+         *
+         * @hide
+         */
+        public static final int QS_TILE_SHAPE_ROUNDED = 1;
+
+        /**
+         * Always use the square Quick Settings tile shape.
+         *
+         * @hide
+         */
+        public static final int QS_TILE_SHAPE_SQUARE = 2;
+
+        /**
+         * Default Quick Settings tile shape behavior.
+         *
+         * @hide
+         */
+        public static final int QS_TILE_SHAPE_DEFAULT = QS_TILE_SHAPE_BOTH;
+
        /**
          * 1 if it is allowed to remove the primary GAIA account. 0 by default.
          * @hide

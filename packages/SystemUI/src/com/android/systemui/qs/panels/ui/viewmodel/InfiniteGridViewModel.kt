@@ -19,6 +19,8 @@ package com.android.systemui.qs.panels.ui.viewmodel
 import com.android.systemui.lifecycle.ExclusiveActivatable
 import com.android.systemui.lifecycle.Hydrator
 import com.android.systemui.media.controls.ui.controller.MediaHierarchyManager.Companion.LOCATION_QS
+import com.android.systemui.qs.panels.domain.interactor.QSTileShapeInteractor
+import com.android.systemui.qs.panels.shared.model.QSTileShape
 import com.android.systemui.qs.panels.shared.model.SizedTileImpl
 import com.android.systemui.qs.panels.ui.dialog.QSResetDialogDelegate
 import com.android.systemui.qs.panels.ui.viewmodel.PaginatableViewModel.Companion.splitInRows
@@ -39,8 +41,15 @@ constructor(
     val snapshotViewModelFactory: InfiniteGridSnapshotViewModel.Factory,
     val resetDialogDelegateFactory: QSResetDialogDelegate.Factory,
     val editTopBarActionsViewModelFactory: EditTopBarActionsViewModel.Factory,
+    qsTileShapeInteractor: QSTileShapeInteractor,
 ) : ExclusiveActivatable(), PaginatableViewModel {
     private val hydrator = Hydrator("InfiniteGridViewModel.hydrator")
+
+    val tileShape by
+        hydrator.hydratedStateOf(
+            initialValue = QSTileShape.BOTH,
+            source = qsTileShapeInteractor.tileShape,
+        )
 
     val iconTilesViewModel = dynamicIconTilesViewModelFactory.create()
     val columnsWithMediaViewModel =

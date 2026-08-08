@@ -67,6 +67,7 @@ fun ContentScope.QuickQuickSettings(
                 Tile(
                     tile = it.tile,
                     iconOnly = it.isIcon,
+                    tileShape = viewModel.tileShape,
                     squishiness = { squishiness },
                     coroutineScope = scope,
                     bounceableInfo =

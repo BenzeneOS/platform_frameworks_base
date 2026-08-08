@@ -24,7 +24,9 @@ import com.android.systemui.lifecycle.HydratedActivatable
 import com.android.systemui.media.controls.ui.controller.MediaHierarchyManager.Companion.LOCATION_QQS
 import com.android.systemui.media.remedia.ui.compose.MediaUiBehavior
 import com.android.systemui.media.remedia.ui.viewmodel.MediaCarouselVisibility
+import com.android.systemui.qs.panels.domain.interactor.QSTileShapeInteractor
 import com.android.systemui.qs.panels.domain.interactor.QuickQuickSettingsRowInteractor
+import com.android.systemui.qs.panels.shared.model.QSTileShape
 import com.android.systemui.qs.panels.shared.model.SizedTileImpl
 import com.android.systemui.qs.panels.shared.model.splitInRowsSequence
 import com.android.systemui.qs.pipeline.domain.interactor.CurrentTilesInteractor
@@ -44,6 +46,7 @@ constructor(
     val squishinessViewModel: TileSquishinessViewModel,
     iconTilesViewModel: IconTilesViewModel,
     val tileHapticsViewModelFactory: TileHapticsViewModel.Factory,
+    qsTileShapeInteractor: QSTileShapeInteractor,
 ) : HydratedActivatable() {
 
     private val qsColumnsViewModel = qsColumnsViewModelFactory.create(LOCATION_QQS, mediaUiBehavior)
@@ -54,6 +57,8 @@ constructor(
         get() = qsColumnsViewModel.columns
 
     private val largeTiles by iconTilesViewModel.largeTiles.hydratedStateOf()
+
+    val tileShape by qsTileShapeInteractor.tileShape.hydratedStateOf(QSTileShape.BOTH)
 
     private val rows: Int
         get() =

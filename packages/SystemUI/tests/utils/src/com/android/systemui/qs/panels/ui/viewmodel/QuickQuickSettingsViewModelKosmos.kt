@@ -18,6 +18,7 @@ package com.android.systemui.qs.panels.ui.viewmodel
 
 import com.android.systemui.haptics.msdl.tileHapticsViewModelFactory
 import com.android.systemui.kosmos.Kosmos
+import com.android.systemui.qs.panels.domain.interactor.qsTileShapeInteractor
 import com.android.systemui.qs.panels.domain.interactor.quickQuickSettingsRowInteractor
 import com.android.systemui.qs.pipeline.domain.interactor.currentTilesInteractor
 
@@ -33,6 +34,7 @@ val Kosmos.quickQuickSettingsViewModelFactory by
                     tileSquishinessViewModel,
                     iconTilesViewModel,
                     tileHapticsViewModelFactory,
+                    qsTileShapeInteractor,
                 )
             }
         }

@@ -114,6 +114,7 @@ constructor(
                 Tile(
                     tile = it.tile,
                     iconOnly = iconTilesViewModel.isIconTile(it.tile.spec),
+                    tileShape = viewModel.tileShape,
                     squishiness = { squishiness },
                     tileHapticsViewModelFactory = tileHapticsViewModelFactory,
                     coroutineScope = scope,
