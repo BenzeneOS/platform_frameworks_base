@@ -28,12 +28,20 @@ import android.os.UserHandle;
 import android.provider.DeviceConfig;
 import android.provider.Settings;
 import android.util.DisplayMetrics;
+import android.util.Range;
 import android.util.TypedValue;
 
 /**
  * @hide
  */
 public class GestureNavigationSettingsObserver extends ContentObserver {
+    private static final String[] BACK_GESTURE_REGION_SETTINGS = {
+            Settings.Secure.BACK_GESTURE_REGION_LEFT_TOP_PERCENT,
+            Settings.Secure.BACK_GESTURE_REGION_LEFT_BOTTOM_PERCENT,
+            Settings.Secure.BACK_GESTURE_REGION_RIGHT_TOP_PERCENT,
+            Settings.Secure.BACK_GESTURE_REGION_RIGHT_BOTTOM_PERCENT,
+    };
+
     private Context mContext;
     private Runnable mOnChangeRunnable;
     private Handler mMainHandler;
@@ -71,6 +79,7 @@ public class GestureNavigationSettingsObserver extends ContentObserver {
             r.registerContentObserver(
                     Settings.Secure.getUriFor(Settings.Secure.BACK_GESTURE_INSET_SCALE_RIGHT),
                     false, this, UserHandle.USER_ALL);
+            registerBackGestureRegionSettings(r, true /* allUsers */);
             r.registerContentObserver(
                     Settings.Secure.getUriFor(Settings.Secure.USER_SETUP_COMPLETE),
                     false, this, UserHandle.USER_ALL);
@@ -93,6 +102,7 @@ public class GestureNavigationSettingsObserver extends ContentObserver {
             r.registerContentObserver(
                     Settings.Secure.getUriFor(Settings.Secure.BACK_GESTURE_INSET_SCALE_RIGHT),
                     false, this);
+            registerBackGestureRegionSettings(r, false /* allUsers */);
             r.registerContentObserver(
                     Settings.Secure.getUriFor(Settings.Secure.USER_SETUP_COMPLETE),
                     false, this);
@@ -160,6 +170,26 @@ public class GestureNavigationSettingsObserver extends ContentObserver {
         return (int) (getUnscaledInset(userRes) * scale);
     }
 
+    /**
+     * Returns the left back gesture region as top-origin display-height percentages. The lower
+     * boundary is inclusive and the upper boundary is exclusive.
+     */
+    public Range<Integer> getLeftBackGestureRegion() {
+        return getBackGestureRegion(
+                Settings.Secure.BACK_GESTURE_REGION_LEFT_TOP_PERCENT,
+                Settings.Secure.BACK_GESTURE_REGION_LEFT_BOTTOM_PERCENT);
+    }
+
+    /**
+     * Returns the right back gesture region as top-origin display-height percentages. The lower
+     * boundary is inclusive and the upper boundary is exclusive.
+     */
+    public Range<Integer> getRightBackGestureRegion() {
+        return getBackGestureRegion(
+                Settings.Secure.BACK_GESTURE_REGION_RIGHT_TOP_PERCENT,
+                Settings.Secure.BACK_GESTURE_REGION_RIGHT_BOTTOM_PERCENT);
+    }
+
     public boolean areNavigationButtonForcedVisible() {
         String SUWTheme = SystemProperties.get("setupwizard.theme", "");
         boolean isExpressiveThemeEnabled = SUWTheme.equals("glif_expressive")
@@ -182,5 +212,29 @@ public class GestureNavigationSettingsObserver extends ContentObserver {
         final float inset = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, backGestureInset,
                 dm);
         return inset;
+    }
+
+    private Range<Integer> getBackGestureRegion(String topSettingsKey, String bottomSettingsKey) {
+        final int topPercent = getBackGestureRegionPercent(topSettingsKey, 0);
+        final int bottomPercent = getBackGestureRegionPercent(bottomSettingsKey, 100);
+        return Range.create(
+                Math.min(topPercent, bottomPercent), Math.max(topPercent, bottomPercent));
+    }
+
+    private int getBackGestureRegionPercent(String settingsKey, int defaultValue) {
+        final int percent = Settings.Secure.getIntForUser(mContext.getContentResolver(),
+                settingsKey, defaultValue, UserHandle.USER_CURRENT);
+        return Math.max(0, Math.min(100, percent));
+    }
+
+    private void registerBackGestureRegionSettings(ContentResolver resolver, boolean allUsers) {
+        for (String setting : BACK_GESTURE_REGION_SETTINGS) {
+            if (allUsers) {
+                resolver.registerContentObserver(Settings.Secure.getUriFor(setting), false,
+                        this, UserHandle.USER_ALL);
+            } else {
+                resolver.registerContentObserver(Settings.Secure.getUriFor(setting), false, this);
+            }
+        }
     }
 }

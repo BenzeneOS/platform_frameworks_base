@@ -58,6 +58,7 @@ import android.provider.DeviceConfig;
 import android.util.ArraySet;
 import android.util.DisplayMetrics;
 import android.util.Log;
+import android.util.Range;
 import android.util.TypedValue;
 import android.view.Display;
 import android.view.ISystemGestureExclusionListener;
@@ -138,6 +139,7 @@ public class EdgeBackGestureHandler {
 
     private static final int MAX_NUM_LOGGED_PREDICTIONS = 10;
     private static final int MAX_NUM_LOGGED_GESTURES = 10;
+    private static final Range<Integer> DEFAULT_BACK_GESTURE_REGION = Range.create(0, 100);
 
     public static final boolean DEBUG_MISSING_GESTURE = false;
     public static final String DEBUG_MISSING_GESTURE_TAG = "NoBackGesture";
@@ -242,6 +244,9 @@ public class EdgeBackGestureHandler {
     private int mEdgeWidthRight;
     // The bottom gesture area height
     private float mBottomGestureHeight;
+    // Top-origin vertical screen percentages where edge back gestures are accepted.
+    private Range<Integer> mBackGestureRegionLeft = DEFAULT_BACK_GESTURE_REGION;
+    private Range<Integer> mBackGestureRegionRight = DEFAULT_BACK_GESTURE_REGION;
     // The slop to distinguish between horizontal and vertical motion
     private float mTouchSlop;
     // The threshold for back swipe full progress.
@@ -591,6 +596,10 @@ public class EdgeBackGestureHandler {
                 defaultGestureHeight);
         mBottomGestureHeight = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, gestureHeight,
                 dm);
+        mBackGestureRegionLeft =
+                mGestureNavigationSettingsObserver.getLeftBackGestureRegion();
+        mBackGestureRegionRight =
+                mGestureNavigationSettingsObserver.getRightBackGestureRegion();
 
         // Set the minimum bounds to activate ML to 12dp or the minimum of configured values
         mMLEnableWidth = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 12.0f, dm);
@@ -987,7 +996,10 @@ public class EdgeBackGestureHandler {
         return mMLResults >= mMLModelThreshold ? 1 : 0;
     }
 
-    private boolean isWithinInsets(int x, int y) {
+    private boolean isWithinInsets(int x, int y, boolean isLeftEdge) {
+        if (!isWithinBackGestureRegion(y, isLeftEdge)) {
+            return false;
+        }
         // Disallow if we are in the bottom gesture area
         if (y >= (mDisplaySize.y - mBottomGestureHeight)) {
             return false;
@@ -1001,6 +1013,17 @@ public class EdgeBackGestureHandler {
             return false;
         }
         return true;
+    }
+
+    private boolean isWithinBackGestureRegion(int y, boolean isLeftEdge) {
+        if (mDisplaySize.y <= 0) {
+            return true;
+        }
+        final Range<Integer> region =
+                isLeftEdge ? mBackGestureRegionLeft : mBackGestureRegionRight;
+        final long scaledY = y * 100L;
+        return scaledY >= (long) region.getLower() * mDisplaySize.y
+                && scaledY < (long) region.getUpper() * mDisplaySize.y;
     }
 
     private boolean desktopExcludeRegionContains(int x, int y) {
@@ -1136,7 +1159,8 @@ public class EdgeBackGestureHandler {
             mMLResults = 0;
             mLogGesture = false;
             mInRejectedExclusion = false;
-            boolean isWithinInsets = isWithinInsets((int) ev.getX(), (int) ev.getY());
+            boolean isWithinInsets = isWithinInsets(
+                    (int) ev.getX(), (int) ev.getY(), mIsOnLeftEdge);
             boolean isBackAllowedCommon = !mDisabledForQuickstep && mIsBackGestureAllowed
                     && !mGestureBlockingActivityRunning.get()
                     && !QuickStepContract.isBackGestureDisabled(mSysUiFlags,
@@ -1387,6 +1411,8 @@ public class EdgeBackGestureHandler {
         pw.println("  mMLModelThreshold=" + mMLModelThreshold);
         pw.println("  mTouchSlop=" + mTouchSlop);
         pw.println("  mBottomGestureHeight=" + mBottomGestureHeight);
+        pw.println("  mBackGestureRegionLeft=" + mBackGestureRegionLeft);
+        pw.println("  mBackGestureRegionRight=" + mBackGestureRegionRight);
         pw.println("  mPredictionLog=" + String.join("\n", mPredictionLog));
         pw.println("  mGestureLogInsideInsets=" + String.join("\n", mGestureLogInsideInsets));
         pw.println("  mGestureLogOutsideInsets=" + String.join("\n", mGestureLogOutsideInsets));

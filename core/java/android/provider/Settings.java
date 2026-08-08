@@ -13529,6 +13529,42 @@ public final class Settings {
                 "back_gesture_inset_scale_right";
 
         /**
+         * Inclusive top boundary of the left edge screen region that can trigger the back gesture,
+         * as an integer percentage of the display height from the top of the display.
+         * @hide
+         */
+        @Readable
+        public static final String BACK_GESTURE_REGION_LEFT_TOP_PERCENT =
+                "back_gesture_region_left_top_percent";
+
+        /**
+         * Exclusive bottom boundary of the left edge screen region that can trigger the back
+         * gesture, as an integer percentage of the display height from the top of the display.
+         * @hide
+         */
+        @Readable
+        public static final String BACK_GESTURE_REGION_LEFT_BOTTOM_PERCENT =
+                "back_gesture_region_left_bottom_percent";
+
+        /**
+         * Inclusive top boundary of the right edge screen region that can trigger the back gesture,
+         * as an integer percentage of the display height from the top of the display.
+         * @hide
+         */
+        @Readable
+        public static final String BACK_GESTURE_REGION_RIGHT_TOP_PERCENT =
+                "back_gesture_region_right_top_percent";
+
+        /**
+         * Exclusive bottom boundary of the right edge screen region that can trigger the back
+         * gesture, as an integer percentage of the display height from the top of the display.
+         * @hide
+         */
+        @Readable
+        public static final String BACK_GESTURE_REGION_RIGHT_BOTTOM_PERCENT =
+                "back_gesture_region_right_bottom_percent";
+
+        /**
          * Whether to show the navigation bar hint (gesture pill) in gesture navigation mode.
          * 0 = hidden, 1 = visible (default)
          * @hide
