@@ -956,6 +956,8 @@ public class BatteryStatsImpl extends BatteryStats {
     int mWakeLockNesting;
     boolean mWakeLockImportant;
     public boolean mRecordAllHistory;
+    private boolean mRecordAllHistoryRequested;
+    private boolean mRecordAllHistoryForCallbacks;
     boolean mNoAutoReset;
 
     /**
@@ -4464,6 +4466,23 @@ public class BatteryStatsImpl extends BatteryStats {
 
     @GuardedBy("this")
     public void setRecordAllHistoryLocked(boolean enabled) {
+        mRecordAllHistoryRequested = enabled;
+        updateRecordAllHistoryLocked();
+    }
+
+    /** Keeps detailed history active while a privileged callback consumer is alive. */
+    @GuardedBy("this")
+    public void setRecordAllHistoryForCallbacksLocked(boolean enabled) {
+        mRecordAllHistoryForCallbacks = enabled;
+        updateRecordAllHistoryLocked();
+    }
+
+    @GuardedBy("this")
+    private void updateRecordAllHistoryLocked() {
+        final boolean enabled = mRecordAllHistoryRequested || mRecordAllHistoryForCallbacks;
+        if (mRecordAllHistory == enabled) {
+            return;
+        }
         mRecordAllHistory = enabled;
         if (!enabled) {
             // Clear out any existing state.
@@ -13049,6 +13068,7 @@ public class BatteryStatsImpl extends BatteryStats {
     @VisibleForTesting
     public void forceRecordAllHistory() {
         mHistory.forceRecordAllHistory();
+        mRecordAllHistoryRequested = true;
         mRecordAllHistory = true;
     }
 

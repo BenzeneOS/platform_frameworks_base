@@ -17,11 +17,13 @@
 package android.os;
 
 import android.annotation.IntDef;
+import android.annotation.Nullable;
 import android.net.Network;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.util.List;
+import java.util.function.Consumer;
 
 /**
  * Battery stats local system service interface. This is used to pass internal data out of
@@ -123,4 +125,26 @@ public abstract class BatteryStatsInternal {
 
     /** See PowerStatsUidResolver.mapUid(). */
     public abstract int getOwnerUid(int uid);
+
+    public static final int LOCATION_REQUEST_ACTIVE = 1;
+    public static final int LOCATION_REQUEST_INACTIVE = 2;
+    public static final int LOCATION_REQUEST_FOREGROUND = 3;
+    public static final int LOCATION_REQUEST_BACKGROUND = 4;
+
+    /**
+     * Reports a location request transition with the identity WorkSource collapses to a bare uid.
+     * Runs under the location multiplexer lock, so it must be cheap and must not call back.
+     *
+     * @param registrationId tells a second concurrent request from a repeat of the same one.
+     */
+    public abstract void noteLocationRequestStateChanged(int eventType, int uid,
+            @Nullable String packageName, @Nullable String attributionTag, String provider,
+            @Nullable String registrationId, long intervalMillis, int quality, boolean foreground);
+
+    /**
+     * Registers the hook that starts radio request collection. It is handed an action to run with
+     * location transitions held off, and must replay live requests before releasing them.
+     */
+    public abstract void setLocationRequestSnapshotCallback(
+            @Nullable Consumer<Runnable> callback);
 }

@@ -125,6 +125,7 @@ import com.android.server.location.injector.DeviceIdleHelper;
 import com.android.server.location.injector.DeviceStationaryHelper;
 import com.android.server.location.injector.EmergencyHelper;
 import com.android.server.location.injector.Injector;
+import com.android.server.location.injector.LocationBatteryStatsReporter;
 import com.android.server.location.injector.LocationPermissionsHelper;
 import com.android.server.location.injector.LocationPowerSaveModeHelper;
 import com.android.server.location.injector.LocationUsageLogger;
@@ -204,6 +205,7 @@ public class LocationManagerService extends ILocationManager.Stub implements
                 // the location service must be functioning after this boot phase
                 mSystemInjector.onSystemReady();
                 mService.onSystemReady();
+                LocationBatteryStatsReporter.onSystemReady();
             } else if (phase == PHASE_THIRD_PARTY_APPS_CAN_START) {
                 // some providers rely on third party code, so we wait to initialize
                 // providers until third party code is allowed to run

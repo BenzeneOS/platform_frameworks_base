@@ -30,6 +30,7 @@
 #include <climits>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 #include <android-base/thread_annotations.h>
 #include <android/hardware/power/1.0/IPower.h>
@@ -43,6 +44,7 @@
 #include <nativehelper/ScopedLocalRef.h>
 #include <nativehelper/ScopedPrimitiveArray.h>
 
+#include <cputimeinstate.h>
 #include <powermanager/PowerHalLoader.h>
 
 #include <log/log.h>
@@ -345,8 +347,58 @@ static void getRailEnergyPowerStats(JNIEnv* env, jobject /* clazz */, jobject jr
     return;
 }
 
+static jboolean nativeStartObservatoryCpuTracking(JNIEnv*, jclass) {
+    return bpf::startObservatoryCpuTracking();
+}
+
+static void nativeStopObservatoryCpuTracking(JNIEnv*, jclass) {
+    bpf::stopObservatoryCpuTracking();
+}
+
+static jint nativeWaitObservatoryCpuPressure(JNIEnv*, jclass) {
+    return bpf::waitForObservatoryCpuPressure();
+}
+
+static jlong nativeObservatoryCpuSessionGeneration(JNIEnv*, jclass) {
+    return static_cast<jlong>(bpf::observatoryCpuSessionGeneration());
+}
+
+static jlongArray nativeDrainObservatoryCpuTimeBuckets(JNIEnv* env, jclass, jint maxRecords,
+                                                       jlong expectedGeneration) {
+    if (maxRecords <= 0) return env->NewLongArray(0);
+    uint64_t safeWatermarkMs = 0;
+    const auto buckets =
+            bpf::drainObservatoryCpuBuckets(static_cast<size_t>(maxRecords), &safeWatermarkMs,
+                                            static_cast<uint64_t>(expectedGeneration));
+    if (!buckets.has_value()) return nullptr;
+
+    // Leading element, so a concurrent drain cannot pick up this one's watermark.
+    std::vector<jlong> flattened;
+    flattened.reserve(buckets->size() * 3 + 1);
+    flattened.push_back(static_cast<jlong>(safeWatermarkMs));
+    for (const auto& bucket : *buckets) {
+        flattened.push_back(bucket.uid);
+        flattened.push_back(bucket.start_elapsed_realtime_ms);
+        flattened.push_back(bucket.runtime_ns);
+    }
+    jlongArray result = env->NewLongArray(flattened.size());
+    if (result == nullptr) return result;
+    env->SetLongArrayRegion(result, 0, flattened.size(), flattened.data());
+    return result;
+}
+
 static const JNINativeMethod method_table[] = {
     { "nativeWaitWakeup", "(Ljava/nio/ByteBuffer;)I", (void*)nativeWaitWakeup },
+    { "nativeStartObservatoryCpuTracking", "()Z",
+        (void*)nativeStartObservatoryCpuTracking },
+    { "nativeStopObservatoryCpuTracking", "()V",
+        (void*)nativeStopObservatoryCpuTracking },
+    { "nativeWaitObservatoryCpuPressure", "()I",
+        (void*)nativeWaitObservatoryCpuPressure },
+    { "nativeObservatoryCpuSessionGeneration", "()J",
+        (void*)nativeObservatoryCpuSessionGeneration },
+    { "nativeDrainObservatoryCpuTimeBuckets", "(IJ)[J",
+        (void*)nativeDrainObservatoryCpuTimeBuckets },
     { "getRailEnergyPowerStats", "(Lcom/android/internal/os/RailStats;)V",
         (void*)getRailEnergyPowerStats },
 };

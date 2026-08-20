@@ -19,6 +19,7 @@ package com.android.server.am;
 import static android.Manifest.permission.BATTERY_STATS;
 import static android.Manifest.permission.DEVICE_POWER;
 import static android.Manifest.permission.NETWORK_STACK;
+import static android.Manifest.permission.OBSERVE_TRACING_SESSION;
 import static android.Manifest.permission.POWER_SAVER;
 import static android.Manifest.permission.UPDATE_DEVICE_STATS;
 import static android.net.NetworkCapabilities.NET_CAPABILITY_NOT_SUSPENDED;
@@ -31,6 +32,7 @@ import static com.android.internal.util.ConcurrentUtils.DIRECT_EXECUTOR;
 
 import android.annotation.EnforcePermission;
 import android.annotation.NonNull;
+import android.annotation.Nullable;
 import android.annotation.RequiresNoPermission;
 import android.annotation.SuppressLint;
 import android.app.ActivityManager.ProcessState;
@@ -74,9 +76,11 @@ import android.os.PowerManagerInternal;
 import android.os.PowerSaveState;
 import android.os.Process;
 import android.os.RemoteException;
+import android.os.RemoteCallbackList;
 import android.os.ResultReceiver;
 import android.os.ServiceManager;
 import android.os.SystemClock;
+import android.system.OsConstants;
 import android.os.Trace;
 import android.os.UidBatteryConsumer;
 import android.os.UserHandle;
@@ -97,6 +101,7 @@ import android.telephony.ModemActivityInfo;
 import android.telephony.NetworkRegistrationInfo;
 import android.telephony.SignalStrength;
 import android.telephony.TelephonyManager;
+import android.util.ArraySet;
 import android.util.AtomicFile;
 import android.util.IndentingPrintWriter;
 import android.util.Slog;
@@ -107,6 +112,9 @@ import com.android.internal.R;
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.app.IBatteryStats;
+import com.android.internal.app.ICpuWakeupCallback;
+import com.android.internal.app.RadioRequestEvent;
+import com.android.internal.app.RadioRequestEventBatch;
 import com.android.internal.os.Clock;
 import com.android.internal.os.CpuScalingPolicies;
 import com.android.internal.os.CpuScalingPolicyReader;
@@ -133,6 +141,7 @@ import com.android.server.power.stats.PowerAttributor;
 import com.android.server.power.stats.PowerStatsScheduler;
 import com.android.server.power.stats.PowerStatsStore;
 import com.android.server.power.stats.PowerStatsUidResolver;
+import com.android.server.power.stats.UidOwnershipHistory;
 import com.android.server.power.stats.processor.MultiStatePowerAttributor;
 import com.android.server.power.stats.wakeups.CpuWakeupStats;
 
@@ -147,12 +156,15 @@ import java.nio.CharBuffer;
 import java.nio.charset.CharsetDecoder;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Consumer;
 import java.util.Properties;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CountDownLatch;
@@ -214,6 +226,69 @@ public final class BatteryStatsService extends IBatteryStats.Stub
 
     private final HandlerThread mHandlerThread;
     private final Handler mHandler;
+    private static final int MAX_CPU_TIME_BUCKET_DRAIN_RECORDS = 8192;
+    private static final int CPU_TIME_BUCKET_FIELDS = 3;
+    private static final long CPU_TIME_BUCKET_MILLIS = 500;
+    // Matches OBSERVATORY_CPU_MAX_BUCKETS. A claim needs at least one bucket to be worth keeping,
+    // so the kernel map's own capacity is the point past which nothing pending can be evicted.
+    private static final int MAX_TRACKED_UID_OWNERSHIPS = 65536;
+    private static final long MIN_CPU_PRESSURE_RETRY_MILLIS = 1000;
+    private static final long MAX_CPU_PRESSURE_RETRY_MILLIS = 60_000;
+    private static final int MAX_RADIO_REQUEST_EVENTS = 4096;
+    // A full ring in one reply parcel would flirt with the 1 MB binder buffer.
+    private static final int MAX_RADIO_REQUEST_DRAIN_RECORDS = 512;
+
+    private static final class CpuWakeupCallbackConfig {
+        final int callingUid;
+        final boolean recordDetailedHistory;
+        final boolean recordCpuTimeBuckets;
+        final boolean recordRadioRequests;
+        final boolean receiveWakeupCallbacks;
+
+        CpuWakeupCallbackConfig(int callingUid, boolean recordDetailedHistory,
+                boolean recordCpuTimeBuckets,
+                boolean recordRadioRequests, boolean receiveWakeupCallbacks) {
+            this.callingUid = callingUid;
+            this.recordDetailedHistory = recordDetailedHistory;
+            this.recordCpuTimeBuckets = recordCpuTimeBuckets;
+            this.recordRadioRequests = recordRadioRequests;
+            this.receiveWakeupCallbacks = receiveWakeupCallbacks;
+        }
+    }
+
+    private final Object mRadioRequestEventLock = new Object();
+    @GuardedBy("mRadioRequestEventLock")
+    private final ArrayDeque<RadioRequestEvent> mRadioRequestEvents = new ArrayDeque<>();
+    @GuardedBy("mRadioRequestEventLock")
+    private long mRadioRequestEventSequence;
+    @GuardedBy("mRadioRequestEventLock")
+    private long mRadioRequestEventsDropped;
+    @GuardedBy("mRadioRequestEventLock")
+    private final Map<String, ArraySet<String>> mRadioRequestOpenRegistrations = new HashMap<>();
+    private volatile boolean mRadioRequestEventsEnabled;
+    private volatile boolean mRadioRequestsWanted;
+    private volatile long mRadioRequestGeneration;
+    private volatile Consumer<Runnable> mLocationRequestSnapshotCallback;
+
+    private final Object mCpuWakeupCallbackLock = new Object();
+    @GuardedBy("mCpuWakeupCallbackLock")
+    private final Map<IBinder, CpuWakeupCallbackConfig> mCpuWakeupCallbackConfigs =
+            new HashMap<>();
+    private final RemoteCallbackList<ICpuWakeupCallback> mCpuWakeupCallbacks;
+    @GuardedBy("mCpuWakeupCallbackLock")
+    private boolean mDetailedHistoryForCpuWakeupCallbacks;
+    @GuardedBy("mCpuWakeupCallbackLock")
+    private boolean mCpuTimeBucketsForCpuWakeupCallbacks;
+    private final Object mObservatoryDrainLock = new Object();
+    @GuardedBy("mCpuWakeupCallbackLock")
+    private long mObservatorySessionGeneration;
+    // Replaced rather than cleared on each session, so a drain still inside native keeps the
+    // history its results need alive through its own reference.
+    @GuardedBy("mCpuWakeupCallbackLock")
+    private UidOwnershipHistory mObservatoryUidOwnerships =
+            new UidOwnershipHistory(0L, MAX_TRACKED_UID_OWNERSHIPS);
+    @GuardedBy("mCpuWakeupCallbackLock")
+    private ObservatoryCpuPressureThread mCpuTimeBucketPressureThread;
     private final Clock mClock = Clock.SYSTEM_CLOCK;
     private final ConditionVariable mSystemReady = new ConditionVariable(false);
 
@@ -368,6 +443,15 @@ public final class BatteryStatsService extends IBatteryStats.Stub
         mHandlerThread.start();
         mHandler = new Handler(mHandlerThread.getLooper());
         mHandler.post(mSystemReady::block);
+        mCpuWakeupCallbacks = new RemoteCallbackList<>() {
+            @Override
+            public void onCallbackDied(ICpuWakeupCallback callback, Object cookie) {
+                synchronized (mCpuWakeupCallbackLock) {
+                    mCpuWakeupCallbackConfigs.remove(callback.asBinder());
+                    applyCpuWakeupCallbackCollectionLocked();
+                }
+            }
+        };
 
         mMonotonicClock = new MonotonicClock(new File(systemDir, "monotonic_clock.xml"));
         mPowerProfile = new PowerProfile(context);
@@ -652,6 +736,37 @@ public final class BatteryStatsService extends IBatteryStats.Stub
             }
             return mPowerStatsUidResolver.mapUid(uid);
         }
+
+        @Override
+        public void noteLocationRequestStateChanged(int eventType, int uid, String packageName,
+                String attributionTag, String provider, String registrationId,
+                long intervalMillis, int quality, boolean foreground) {
+            if (!mRadioRequestEventsEnabled) return;
+            final int type;
+            switch (eventType) {
+                case LOCATION_REQUEST_ACTIVE:
+                    type = RadioRequestEvent.TYPE_LOCATION_ACTIVE;
+                    break;
+                case LOCATION_REQUEST_INACTIVE:
+                    type = RadioRequestEvent.TYPE_LOCATION_INACTIVE;
+                    break;
+                case LOCATION_REQUEST_FOREGROUND:
+                    type = RadioRequestEvent.TYPE_LOCATION_FOREGROUND;
+                    break;
+                case LOCATION_REQUEST_BACKGROUND:
+                    type = RadioRequestEvent.TYPE_LOCATION_BACKGROUND;
+                    break;
+                default:
+                    return;
+            }
+            noteRadioRequestEvent(type, uid, packageName, attributionTag, provider,
+                    registrationId, intervalMillis, quality, foreground);
+        }
+
+        @Override
+        public void setLocationRequestSnapshotCallback(Consumer<Runnable> callback) {
+            mLocationRequestSnapshotCallback = callback;
+        }
     }
 
     /**
@@ -868,14 +983,61 @@ public final class BatteryStatsService extends IBatteryStats.Stub
 
     void addIsolatedUid(final int isolatedUid, final int appUid) {
         mPowerStatsUidResolver.noteIsolatedUidAdded(isolatedUid, appUid);
+        openObservatoryUidOwnership(isolatedUid, appUid, mClock.elapsedRealtime());
         FrameworkStatsLog.write(FrameworkStatsLog.ISOLATED_UID_CHANGED, appUid, isolatedUid,
                 FrameworkStatsLog.ISOLATED_UID_CHANGED__EVENT__CREATED);
     }
 
     void removeIsolatedUid(final int isolatedUid, final int appUid) {
         mPowerStatsUidResolver.noteIsolatedUidRemoved(isolatedUid, appUid);
+        closeObservatoryUidOwnership(isolatedUid, appUid, mClock.elapsedRealtime());
         FrameworkStatsLog.write(FrameworkStatsLog.ISOLATED_UID_CHANGED, -1, isolatedUid,
                 FrameworkStatsLog.ISOLATED_UID_CHANGED__EVENT__REMOVED);
+    }
+
+    /**
+     * Resolves a record to the app that owned its uid when it was recorded, rather than now. A
+     * drain arrives long after the work did, and {@link PowerStatsUidResolver} only answers for
+     * the present. The window is the record's own extent, since a bucket is a grid slot whose
+     * start can precede the process that filled it.
+     */
+    private int resolveObservatoryOwnerUid(UidOwnershipHistory history, int rawUid, long startMs,
+            long endMs) {
+        synchronized (mCpuWakeupCallbackLock) {
+            if (!history.isUnknown(rawUid)) {
+                return history.ownerAt(rawUid, startMs, endMs, rawUid);
+            }
+        }
+        final int resolved = mPowerStatsUidResolver.getOwnerUid(rawUid);
+        // A process older than the session gets a claim from the session start, which is safe
+        // because nothing older can be drained and a live uid is never handed to another process.
+        if (resolved != rawUid) {
+            synchronized (mCpuWakeupCallbackLock) {
+                history.onUidTaken(rawUid, resolved, history.sessionStartElapsedRealtimeMs());
+            }
+        }
+        return resolved;
+    }
+
+    private void openObservatoryUidOwnership(int rawUid, int ownerUid, long elapsedRealtimeMs) {
+        synchronized (mCpuWakeupCallbackLock) {
+            if (!mCpuTimeBucketsForCpuWakeupCallbacks) return;
+            mObservatoryUidOwnerships.onUidTaken(rawUid, ownerUid, elapsedRealtimeMs);
+        }
+    }
+
+    private void closeObservatoryUidOwnership(int rawUid, int ownerUid, long elapsedRealtimeMs) {
+        synchronized (mCpuWakeupCallbackLock) {
+            if (!mCpuTimeBucketsForCpuWakeupCallbacks) return;
+            // A process that predates the session is only ever named here, so its claim is opened
+            // on the way out. Without it, buckets it already filled resolve to a raw uid once the
+            // platform mapping expires.
+            if (mObservatoryUidOwnerships.isUnknown(rawUid)) {
+                mObservatoryUidOwnerships.onUidTaken(rawUid, ownerUid,
+                        mObservatoryUidOwnerships.sessionStartElapsedRealtimeMs());
+            }
+            mObservatoryUidOwnerships.onUidReleased(rawUid, elapsedRealtimeMs);
+        }
     }
 
     void noteProcessStart(final String name, final int uid) {
@@ -1361,6 +1523,345 @@ public final class BatteryStatsService extends IBatteryStats.Stub
         synchronized (mStats) {
             long dischargeUah = mStats.getUahDischargeScreenOff(BatteryStats.STATS_SINCE_CHARGED);
             return dischargeUah / 1000;
+        }
+    }
+
+    @Override
+    @EnforcePermission(OBSERVE_TRACING_SESSION)
+    public boolean registerCpuWakeupCallback(ICpuWakeupCallback callback,
+            boolean recordDetailedHistory, boolean recordCpuTimeBuckets,
+            boolean recordRadioRequests, boolean receiveWakeupCallbacks) {
+        super.registerCpuWakeupCallback_enforcePermission();
+        Objects.requireNonNull(callback, "callback");
+        final CpuWakeupCallbackConfig config = new CpuWakeupCallbackConfig(Binder.getCallingUid(),
+                recordDetailedHistory, recordCpuTimeBuckets, recordRadioRequests,
+                receiveWakeupCallbacks);
+        synchronized (mCpuWakeupCallbackLock) {
+            if (!mCpuWakeupCallbacks.register(callback, config)) {
+                // register() may have unlinked a dying entry whose obituary will never fire.
+                mCpuWakeupCallbackConfigs.remove(callback.asBinder());
+                applyCpuWakeupCallbackCollectionLocked();
+                throw new IllegalStateException("CPU wakeup callback binder is already dead");
+            }
+            mCpuWakeupCallbackConfigs.put(callback.asBinder(), config);
+            applyCpuWakeupCallbackCollectionLocked();
+            return !recordCpuTimeBuckets || mCpuTimeBucketsForCpuWakeupCallbacks;
+        }
+    }
+
+    @Override
+    @EnforcePermission(OBSERVE_TRACING_SESSION)
+    public void unregisterCpuWakeupCallback(ICpuWakeupCallback callback) {
+        super.unregisterCpuWakeupCallback_enforcePermission();
+        Objects.requireNonNull(callback, "callback");
+        synchronized (mCpuWakeupCallbackLock) {
+            mCpuWakeupCallbacks.unregister(callback);
+            mCpuWakeupCallbackConfigs.remove(callback.asBinder());
+            applyCpuWakeupCallbackCollectionLocked();
+        }
+    }
+
+    @GuardedBy("mCpuWakeupCallbackLock")
+    private void applyCpuWakeupCallbackCollectionLocked() {
+        boolean wantsDetailedHistory = false;
+        boolean wantsCpuTimeBuckets = false;
+        boolean wantsRadioRequests = false;
+        for (CpuWakeupCallbackConfig config : mCpuWakeupCallbackConfigs.values()) {
+            wantsDetailedHistory |= config.recordDetailedHistory;
+            wantsCpuTimeBuckets |= config.recordCpuTimeBuckets;
+            wantsRadioRequests |= config.recordRadioRequests;
+        }
+
+        // Compared against what was asked for, since enabling completes asynchronously.
+        if (wantsRadioRequests != mRadioRequestsWanted) {
+            mRadioRequestsWanted = wantsRadioRequests;
+            final long generation = ++mRadioRequestGeneration;
+            if (!wantsRadioRequests) {
+                // Disabled before the clear so a producer mid-check cannot append after it.
+                mRadioRequestEventsEnabled = false;
+                clearRadioRequestEvents();
+            } else {
+                // Enable and snapshot together, outside this lock, so neither races the other.
+                final Consumer<Runnable> withRequestsHeld = mLocationRequestSnapshotCallback;
+                if (withRequestsHeld == null) {
+                    clearRadioRequestEvents();
+                    mRadioRequestEventsEnabled = true;
+                } else {
+                    // One step, as a volatile check then write lets an unregister be overwritten.
+                    mHandler.post(() -> withRequestsHeld.accept(() -> {
+                        synchronized (mCpuWakeupCallbackLock) {
+                            if (mRadioRequestGeneration != generation
+                                    || !mRadioRequestsWanted) {
+                                return;
+                            }
+                            clearRadioRequestEvents();
+                            mRadioRequestEventsEnabled = true;
+                        }
+                    }));
+                }
+            }
+        }
+
+        if (mDetailedHistoryForCpuWakeupCallbacks != wantsDetailedHistory) {
+            mDetailedHistoryForCpuWakeupCallbacks = wantsDetailedHistory;
+            synchronized (mStats) {
+                mStats.setRecordAllHistoryForCallbacksLocked(wantsDetailedHistory);
+            }
+        }
+        if (wantsCpuTimeBuckets && !mCpuTimeBucketsForCpuWakeupCallbacks) {
+            mObservatoryUidOwnerships = new UidOwnershipHistory(mClock.elapsedRealtime(),
+                    MAX_TRACKED_UID_OWNERSHIPS);
+            mCpuTimeBucketsForCpuWakeupCallbacks = nativeStartObservatoryCpuTracking();
+            mObservatorySessionGeneration = nativeObservatoryCpuSessionGeneration();
+            if (!mCpuTimeBucketsForCpuWakeupCallbacks) {
+                Slog.e(TAG, "Unable to start Observatory CPU bucket accounting");
+            } else if (mCpuTimeBucketPressureThread == null) {
+                mCpuTimeBucketPressureThread = new ObservatoryCpuPressureThread();
+                mCpuTimeBucketPressureThread.start();
+            }
+        } else if (!wantsCpuTimeBuckets && mCpuTimeBucketsForCpuWakeupCallbacks) {
+            mCpuTimeBucketsForCpuWakeupCallbacks = false;
+            mCpuTimeBucketPressureThread = null;
+            mObservatoryUidOwnerships = new UidOwnershipHistory(0L, MAX_TRACKED_UID_OWNERSHIPS);
+            nativeStopObservatoryCpuTracking();
+        }
+    }
+
+    @Override
+    @EnforcePermission(OBSERVE_TRACING_SESSION)
+    public long[] drainCpuTimeBuckets(int maxRecords) {
+        super.drainCpuTimeBuckets_enforcePermission();
+        if (maxRecords <= 0 || maxRecords > MAX_CPU_TIME_BUCKET_DRAIN_RECORDS) {
+            throw new IllegalArgumentException("maxRecords must be between 1 and "
+                    + MAX_CPU_TIME_BUCKET_DRAIN_RECORDS);
+        }
+        // Not the collector lock, so a long drain still cannot stall register, unregister, or
+        // isolated process bookkeeping. Two binder callers draining at once would otherwise let
+        // the later one prune ownership the earlier one has yet to resolve against.
+        synchronized (mObservatoryDrainLock) {
+            final UidOwnershipHistory history;
+            final long generation;
+            synchronized (mCpuWakeupCallbackLock) {
+                if (!mCpuTimeBucketsForCpuWakeupCallbacks) return new long[0];
+                // Checked here and not on entry, since a session that ended while this call
+                // queued must not be drained on an authorization it no longer holds.
+                enforceRegisteredCollector("cpu time buckets", false);
+                history = mObservatoryUidOwnerships;
+                generation = mObservatorySessionGeneration;
+            }
+            // The generation goes to native, which compares it under the same lock start and stop
+            // take. A session turning over in this gap fails the drain instead of emptying a map
+            // this caller never meant to touch and reading it with the wrong session's history.
+            final long[] buckets = nativeDrainObservatoryCpuTimeBuckets(maxRecords, generation);
+            return buckets != null ? resolveCpuBucketOwners(history, buckets) : new long[0];
+        }
+    }
+
+    /**
+     * The scheduler hook sees raw kernel uids, so isolated and sandbox processes would otherwise
+     * get rows of their own instead of counting against the app that spawned them. Buckets that
+     * collide once remapped are summed, since a bucket is one uid's total for one time slot.
+     *
+     * <p>[buckets] leads with the drain's safe pruning watermark, which is stripped here.
+     */
+    private long[] resolveCpuBucketOwners(UidOwnershipHistory history, long[] buckets) {
+        if (buckets.length == 0) return new long[0];
+        final long safeWatermarkMs = buckets[0];
+        if ((buckets.length - 1) % CPU_TIME_BUCKET_FIELDS != 0) return new long[0];
+        final long[] resolved = new long[buckets.length - 1];
+        int out = 0;
+        for (int i = 1; i < buckets.length; i += CPU_TIME_BUCKET_FIELDS) {
+            final long startMillis = buckets[i + 1];
+            final long ownerUid = resolveObservatoryOwnerUid(history, (int) buckets[i],
+                    startMillis, startMillis + CPU_TIME_BUCKET_MILLIS);
+            // The drain sorts by slot then uid, so any collision is inside the run just written.
+            int collision = -1;
+            for (int j = out - CPU_TIME_BUCKET_FIELDS; j >= 0; j -= CPU_TIME_BUCKET_FIELDS) {
+                if (resolved[j + 1] != startMillis) break;
+                if (resolved[j] == ownerUid) {
+                    collision = j;
+                    break;
+                }
+            }
+            if (collision >= 0) {
+                resolved[collision + 2] += buckets[i + 2];
+                continue;
+            }
+            resolved[out] = ownerUid;
+            resolved[out + 1] = startMillis;
+            resolved[out + 2] = buckets[i + 2];
+            out += CPU_TIME_BUCKET_FIELDS;
+        }
+        // Zero when the drain could not prove nothing older is still resident, in which case
+        // pruning waits for a drain that can. Keeping too much is only a memory cost.
+        if (safeWatermarkMs > 0) {
+            synchronized (mCpuWakeupCallbackLock) {
+                history.pruneReleasedBefore(safeWatermarkMs);
+            }
+        }
+        return out == resolved.length ? resolved : Arrays.copyOf(resolved, out);
+    }
+
+    @Override
+    @EnforcePermission(OBSERVE_TRACING_SESSION)
+    public RadioRequestEventBatch drainRadioRequestEvents(int maxRecords) {
+        super.drainRadioRequestEvents_enforcePermission();
+        enforceRegisteredCollector("radio request events", true);
+        if (maxRecords <= 0 || maxRecords > MAX_RADIO_REQUEST_DRAIN_RECORDS) {
+            throw new IllegalArgumentException("maxRecords must be between 1 and "
+                    + MAX_RADIO_REQUEST_DRAIN_RECORDS);
+        }
+        final ArrayList<RadioRequestEvent> events = new ArrayList<>();
+        if (!mRadioRequestEventsEnabled) {
+            return new RadioRequestEventBatch(events, 0L);
+        }
+        final long dropped;
+        synchronized (mRadioRequestEventLock) {
+            while (events.size() < maxRecords && !mRadioRequestEvents.isEmpty()) {
+                events.add(mRadioRequestEvents.pollFirst());
+            }
+            // Delta, not total, so a ring that never empties cannot starve the count.
+            dropped = mRadioRequestEventsDropped;
+            mRadioRequestEventsDropped = 0;
+        }
+        return new RadioRequestEventBatch(events, dropped);
+    }
+
+    private void noteRadioRequestEvent(int type, int uid, @Nullable String packageName,
+            @Nullable String attributionTag, String provider, @Nullable String registrationId,
+            long intervalMillis, int quality, boolean foreground) {
+        noteRadioRequestEventAt(SystemClock.elapsedRealtime(), type, uid, packageName,
+                attributionTag, provider, registrationId, intervalMillis, quality, foreground);
+    }
+
+    private void noteRadioRequestEventAt(long elapsedRealtime, int type, int rawUid,
+            @Nullable String packageName, @Nullable String attributionTag, String provider,
+            @Nullable String registrationId, long intervalMillis, int quality,
+            boolean foreground) {
+        if (!mRadioRequestEventsEnabled) return;
+        // Resolved here rather than per caller, so an open and its close key off the same uid.
+        final UidOwnershipHistory history;
+        synchronized (mCpuWakeupCallbackLock) {
+            history = mObservatoryUidOwnerships;
+        }
+        final int uid =
+                resolveObservatoryOwnerUid(history, rawUid, elapsedRealtime, elapsedRealtime + 1L);
+        synchronized (mRadioRequestEventLock) {
+            if (!mRadioRequestEventsEnabled) return;
+            // A set, not a count, so a replay is idempotent but a second registration is not.
+            if (isPairedRadioRequestType(type)) {
+                final String key = uid + "|" + packageName + "|" + attributionTag + "|" + provider;
+                final String registration = registrationId != null ? registrationId : key;
+                if (type == RadioRequestEvent.TYPE_LOCATION_ACTIVE) {
+                    ArraySet<String> open = mRadioRequestOpenRegistrations.get(key);
+                    if (open == null) {
+                        open = new ArraySet<>();
+                        mRadioRequestOpenRegistrations.put(key, open);
+                    }
+                    final boolean wasIdle = open.isEmpty();
+                    open.add(registration);
+                    if (!wasIdle) return;
+                } else {
+                    final ArraySet<String> open = mRadioRequestOpenRegistrations.get(key);
+                    if (open == null || !open.remove(registration)) return;
+                    if (!open.isEmpty()) return;
+                    mRadioRequestOpenRegistrations.remove(key);
+                }
+            }
+            if (mRadioRequestEvents.size() >= MAX_RADIO_REQUEST_EVENTS) {
+                mRadioRequestEvents.pollFirst();
+                mRadioRequestEventsDropped++;
+            }
+            mRadioRequestEvents.addLast(new RadioRequestEvent(++mRadioRequestEventSequence,
+                    elapsedRealtime, type, uid, packageName, attributionTag, provider,
+                    intervalMillis, quality, foreground));
+        }
+    }
+
+    /**
+     * Records are consumed destructively from a single queue, so a caller that never registered
+     * must not be able to take another client's data or reset its counters.
+     */
+    private void enforceRegisteredCollector(String what, boolean radioRequests) {
+        final int callingUid = Binder.getCallingUid();
+        synchronized (mCpuWakeupCallbackLock) {
+            for (CpuWakeupCallbackConfig config : mCpuWakeupCallbackConfigs.values()) {
+                if (config.callingUid != callingUid) continue;
+                // Registering alone is not a claim on data the session never asked for.
+                if (radioRequests ? config.recordRadioRequests : config.recordCpuTimeBuckets) {
+                    return;
+                }
+            }
+        }
+        throw new SecurityException(
+                "Uid " + callingUid + " has no session collecting " + what);
+    }
+
+    private void clearRadioRequestEvents() {
+        synchronized (mRadioRequestEventLock) {
+            mRadioRequestEvents.clear();
+            mRadioRequestOpenRegistrations.clear();
+            mRadioRequestEventsDropped = 0;
+        }
+    }
+
+    private static boolean isPairedRadioRequestType(int type) {
+        return type == RadioRequestEvent.TYPE_LOCATION_ACTIVE
+                || type == RadioRequestEvent.TYPE_LOCATION_INACTIVE;
+    }
+
+    private void noteWifiScanRadioRequestEvents(int type, @Nullable WorkSource ws) {
+        if (ws == null || !mRadioRequestEventsEnabled) return;
+        // Both forms, matching noteWifiScanStartedFromSourceLocked. A WorkSource can carry flat
+        // rows and chains at once, and taking only the chains drops every requester in the rest.
+        for (int i = 0; i < ws.size(); i++) {
+            noteRadioRequestEvent(type, ws.getUid(i), ws.getPackageName(i), null, "wifi-scan",
+                    null, -1L, 0, false);
+        }
+        final List<WorkSource.WorkChain> chains = ws.getWorkChains();
+        if (chains == null) return;
+        for (int i = 0; i < chains.size(); i++) {
+            final WorkSource.WorkChain chain = chains.get(i);
+            noteRadioRequestEvent(type, chain.getAttributionUid(), null,
+                    chain.getAttributionTag(), "wifi-scan", null, -1L, 0, false);
+        }
+    }
+
+    private void notifyCpuWakeupCallbacks(long elapsedRealtimeMillis, long uptimeMillis,
+            String reason) {
+        final int callbackCount = mCpuWakeupCallbacks.beginBroadcast();
+        try {
+            for (int i = 0; i < callbackCount; i++) {
+                final CpuWakeupCallbackConfig config =
+                        (CpuWakeupCallbackConfig) mCpuWakeupCallbacks.getBroadcastCookie(i);
+                if (!config.receiveWakeupCallbacks) continue;
+                try {
+                    mCpuWakeupCallbacks.getBroadcastItem(i).onCpuWakeup(
+                            elapsedRealtimeMillis, uptimeMillis, reason);
+                } catch (RemoteException ignored) {
+                    // RemoteCallbackList removes dead binders through its death recipient.
+                }
+            }
+        } finally {
+            mCpuWakeupCallbacks.finishBroadcast();
+        }
+    }
+
+    private void notifyCpuTimeBucketPressureCallbacks() {
+        final int callbackCount = mCpuWakeupCallbacks.beginBroadcast();
+        try {
+            for (int i = 0; i < callbackCount; i++) {
+                final CpuWakeupCallbackConfig config =
+                        (CpuWakeupCallbackConfig) mCpuWakeupCallbacks.getBroadcastCookie(i);
+                if (!config.recordCpuTimeBuckets) continue;
+                try {
+                    mCpuWakeupCallbacks.getBroadcastItem(i).onCpuTimeBucketsPressure();
+                } catch (RemoteException ignored) {
+                    // RemoteCallbackList removes dead binders through its death recipient.
+                }
+            }
+        } finally {
+            mCpuWakeupCallbacks.finishBroadcast();
         }
     }
 
@@ -1949,6 +2450,12 @@ public final class BatteryStatsService extends IBatteryStats.Stub
                     if (mLastPowerStateFromRadio == powerState) return;
 
                     mLastPowerStateFromRadio = powerState;
+                    // The modem's timestamp, not handler-drain time, for wakeup correlation.
+                    noteRadioRequestEventAt(timestampNs / 1_000_000L,
+                            powerState == DataConnectionRealTimeInfo.DC_POWER_STATE_HIGH
+                                    ? RadioRequestEvent.TYPE_MOBILE_RADIO_ACTIVE
+                                    : RadioRequestEvent.TYPE_MOBILE_RADIO_INACTIVE,
+                            uid, null, null, "mobile-radio", null, -1L, 0, false);
                     mStats.noteMobileRadioPowerStateLocked(powerState, timestampNs, uid,
                             elapsedRealtime, uptime);
                 }
@@ -2576,6 +3083,7 @@ public final class BatteryStatsService extends IBatteryStats.Stub
     public void noteWifiScanStartedFromSource(final WorkSource ws) {
         super.noteWifiScanStartedFromSource_enforcePermission();
 
+        noteWifiScanRadioRequestEvents(RadioRequestEvent.TYPE_WIFI_SCAN_STARTED, ws);
         final WorkSource localWs = ws != null ? new WorkSource(ws) : null;
         synchronized (mClock) {
             final long elapsedRealtime = mClock.elapsedRealtime();
@@ -2593,6 +3101,7 @@ public final class BatteryStatsService extends IBatteryStats.Stub
     public void noteWifiScanStoppedFromSource(final WorkSource ws) {
         super.noteWifiScanStoppedFromSource_enforcePermission();
 
+        noteWifiScanRadioRequestEvents(RadioRequestEvent.TYPE_WIFI_SCAN_STOPPED, ws);
         final WorkSource localWs = ws != null ? new WorkSource(ws) : null;
         synchronized (mClock) {
             final long elapsedRealtime = mClock.elapsedRealtime();
@@ -2933,6 +3442,7 @@ public final class BatteryStatsService extends IBatteryStats.Stub
                             synchronized (mStats) {
                                 mStats.noteWakeupReasonLocked(reason, nowElapsed, nowUptime);
                             }
+                            notifyCpuWakeupCallbacks(nowElapsed, nowUptime, reason);
                         });
                     }
                 }
@@ -2966,7 +3476,58 @@ public final class BatteryStatsService extends IBatteryStats.Stub
         }
     }
 
+    final class ObservatoryCpuPressureThread extends Thread {
+        ObservatoryCpuPressureThread() {
+            super("BatteryStats_observatoryPressure");
+        }
+
+        @Override
+        public void run() {
+            Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND);
+            long backoffMillis = MIN_CPU_PRESSURE_RETRY_MILLIS;
+            while (true) {
+                // Checked before waiting too, so a stop during backoff cannot strand this.
+                synchronized (mCpuWakeupCallbackLock) {
+                    if (mCpuTimeBucketPressureThread != this
+                            || !mCpuTimeBucketsForCpuWakeupCallbacks) {
+                        return;
+                    }
+                }
+                final int result = nativeWaitObservatoryCpuPressure();
+                // A stale waiter can catch the event, and only a drain re-arms the program.
+                if (result == 0) {
+                    mHandler.post(BatteryStatsService.this::notifyCpuTimeBucketPressureCallbacks);
+                }
+                synchronized (mCpuWakeupCallbackLock) {
+                    if (mCpuTimeBucketPressureThread != this
+                            || !mCpuTimeBucketsForCpuWakeupCallbacks) {
+                        return;
+                    }
+                }
+                if (result == 0) {
+                    backoffMillis = MIN_CPU_PRESSURE_RETRY_MILLIS;
+                    continue;
+                }
+                if (result == -OsConstants.ECANCELED) {
+                    // Stale stop token from a stop/restart race. Wait again.
+                    continue;
+                }
+                Slog.e(TAG, "Observatory CPU bucket pressure wait failed (" + result
+                        + "), retrying in " + backoffMillis + " ms");
+                // Uptime-based, so the retry timer cannot wake a suspended device.
+                SystemClock.sleep(backoffMillis);
+                backoffMillis = Math.min(backoffMillis * 2, MAX_CPU_PRESSURE_RETRY_MILLIS);
+            }
+        }
+    }
+
     private static native int nativeWaitWakeup(ByteBuffer outBuffer);
+    private static native boolean nativeStartObservatoryCpuTracking();
+    private static native void nativeStopObservatoryCpuTracking();
+    private static native int nativeWaitObservatoryCpuPressure();
+    private static native long nativeObservatoryCpuSessionGeneration();
+    private static native long[] nativeDrainObservatoryCpuTimeBuckets(int maxRecords,
+            long expectedGeneration);
 
     private void dumpHelp(PrintWriter pw) {
         pw.println("Battery stats (batterystats) dump options:");

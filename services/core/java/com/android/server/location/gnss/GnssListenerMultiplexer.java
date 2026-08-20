@@ -38,6 +38,7 @@ import com.android.server.FgThread;
 import com.android.server.LocalServices;
 import com.android.server.location.injector.AppForegroundHelper;
 import com.android.server.location.injector.Injector;
+import com.android.server.location.injector.LocationBatteryStatsReporter;
 import com.android.server.location.injector.LocationPermissionsHelper;
 import com.android.server.location.injector.PackageResetHelper;
 import com.android.server.location.injector.SettingsHelper;
@@ -128,6 +129,40 @@ public abstract class GnssListenerMultiplexer<TRequest, TListener extends IInter
             mPermitted = mLocationPermissionsHelper.hasLocationPermissions(PERMISSION_FINE,
                     mIdentity);
             mForeground = mAppForegroundHelper.isAppForeground(mIdentity.getUid());
+        }
+
+        @Override
+        protected void onActive() {
+            super.onActive();
+            reportToBatteryStats(true);
+        }
+
+        @Override
+        protected void onInactive() {
+            reportToBatteryStats(false);
+            super.onInactive();
+        }
+
+        @Override
+        protected void onUnregister() {
+            LocationBatteryStatsReporter.forget(mIdentity, getOwnerTag());
+            super.onUnregister();
+        }
+
+        private String getOwnerTag() {
+            GnssListenerMultiplexer<?, ?, ?> owner = getOwner();
+            return owner == null ? TAG : owner.getClass().getSimpleName();
+        }
+
+        private void reportToBatteryStats(boolean active) {
+            if (getOwner() == null) return;
+            if (active) {
+                LocationBatteryStatsReporter.reportGnssListenerActive(
+                        getOwnerTag(), mIdentity, mForeground);
+            } else {
+                LocationBatteryStatsReporter.reportGnssListenerInactive(
+                        getOwnerTag(), mIdentity, mForeground);
+            }
         }
 
         boolean onLocationPermissionsChanged(@Nullable String packageName) {

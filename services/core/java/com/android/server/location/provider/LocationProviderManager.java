@@ -112,6 +112,7 @@ import com.android.server.location.injector.AppForegroundHelper.AppForegroundLis
 import com.android.server.location.injector.AppOpsHelper;
 import com.android.server.location.injector.EmergencyHelper;
 import com.android.server.location.injector.Injector;
+import com.android.server.location.injector.LocationBatteryStatsReporter;
 import com.android.server.location.injector.LocationPermissionsHelper;
 import com.android.server.location.injector.LocationPermissionsHelper.LocationPermissionsListener;
 import com.android.server.location.injector.LocationPowerSaveModeHelper;
@@ -468,6 +469,7 @@ public class LocationProviderManager extends
         @GuardedBy("mMultiplexerLock")
         @Override
         protected void onUnregister() {
+            LocationBatteryStatsReporter.forget(getIdentity(), mName);
             EVENT_LOG.logProviderClientUnregistered(mName, getIdentity());
 
             if (D) {
@@ -481,6 +483,8 @@ public class LocationProviderManager extends
         @Override
         protected void onActive() {
             EVENT_LOG.logProviderClientActive(mName, getIdentity());
+            LocationBatteryStatsReporter.reportActive(mName, getIdentity(), getRequest(),
+                    mForeground);
 
             if (!getRequest().isHiddenFromAppOps()) {
                 mAppOpsHelper.startOpNoThrow(OP_MONITOR_LOCATION, getIdentity());
@@ -497,6 +501,8 @@ public class LocationProviderManager extends
             }
 
             EVENT_LOG.logProviderClientInactive(mName, getIdentity());
+            LocationBatteryStatsReporter.reportInactive(mName, getIdentity(), getRequest(),
+                    mForeground);
         }
 
         @GuardedBy("mMultiplexerLock")
@@ -675,6 +681,11 @@ public class LocationProviderManager extends
                         EVENT_LOG.logProviderClientForeground(mName, getIdentity());
                     } else {
                         EVENT_LOG.logProviderClientBackground(mName, getIdentity());
+                    }
+                    // Only active ones, so pairing never sees an unknown requester.
+                    if (isActive()) {
+                        LocationBatteryStatsReporter.reportForegroundChanged(mName, getIdentity(),
+                                getRequest(), mForeground);
                     }
 
                     // note that onProviderLocationRequestChanged() is always called

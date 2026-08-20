@@ -7919,6 +7919,13 @@
         android:protectionLevel="signature|privileged|development"
         android:permissionFlags="allowedInPrivateComputeCore" />
 
+    <!-- @hide Allows an application to run an opt-in wake and CPU tracing session, whose queues
+         are drained destructively and whose records carry per-app identity. Signature only, as
+         BATTERY_STATS can be granted over adb.
+         <p>Protection level: signature -->
+    <permission android:name="android.permission.OBSERVE_TRACING_SESSION"
+        android:protectionLevel="signature" />
+
     <!-- @SystemApi @hide Allows an application to collect high-precision PowerMonitor readings
          <p>Protection level: signature|privileged|development
          @FlaggedApi(android.permission.flags.Flags.FLAG_FINE_POWER_MONITOR_PERMISSION) -->

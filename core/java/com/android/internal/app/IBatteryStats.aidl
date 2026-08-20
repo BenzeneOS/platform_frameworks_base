@@ -33,6 +33,9 @@ import android.telephony.DataConnectionRealTimeInfo;
 import android.telephony.ModemActivityInfo;
 import android.telephony.SignalStrength;
 
+import com.android.internal.app.ICpuWakeupCallback;
+import com.android.internal.app.RadioRequestEventBatch;
+
 interface IBatteryStats {
     /** @hide */
     const int RESULT_OK = 0;
@@ -107,6 +110,35 @@ interface IBatteryStats {
     long computeBatteryScreenOffRealtimeMs();
     @EnforcePermission("BATTERY_STATS")
     long getScreenOffDischargeMah();
+
+    /**
+     * Registers an opt-in tracing session tied to the callback binder's lifetime. Detailed history
+     * includes alarm, process, and incoming wakelock events. CPU time buckets are accumulated by a
+     * scheduler BPF program even when the client is parked. Resume callbacks can be disabled so
+     * they never wake the client process.
+     *
+     * @return whether every requested collector was started
+     * @hide
+     */
+    @EnforcePermission("OBSERVE_TRACING_SESSION")
+    boolean registerCpuWakeupCallback(ICpuWakeupCallback callback, boolean recordDetailedHistory,
+            boolean recordCpuTimeBuckets, boolean recordRadioRequests,
+            boolean receiveWakeupCallbacks);
+
+    /** @hide */
+    @EnforcePermission("OBSERVE_TRACING_SESSION")
+    void unregisterCpuWakeupCallback(ICpuWakeupCallback callback);
+
+    /** Returns and removes completed [uid, elapsed-realtime start, runtime-ns] CPU buckets. @hide */
+    @EnforcePermission("OBSERVE_TRACING_SESSION")
+    long[] drainCpuTimeBuckets(int maxRecords);
+
+    /**
+     * Returns and removes buffered radio request transitions, oldest first, along with the count
+     * of records the bounded buffer overwrote since the previous drain. @hide
+     */
+    @EnforcePermission("OBSERVE_TRACING_SESSION")
+    RadioRequestEventBatch drainRadioRequestEvents(int maxRecords);
 
     @EnforcePermission("UPDATE_DEVICE_STATS")
     void noteEvent(int code, String name, int uid);
