@@ -194,7 +194,19 @@ public final class DozeServiceHost implements DozeHost {
         mCentralSurfaces = centralSurfaces;
         mStatusBarKeyguardViewManager = statusBarKeyguardViewManager;
         mNotificationShadeWindowViewController = notificationShadeWindowViewController;
+        if (mAmbientIndicationContainer == null || !SceneContainerFlag.isEnabled()) {
+            mAmbientIndicationContainer = ambientIndicationContainer;
+        }
+    }
+
+    public void setAmbientIndicationContainer(View ambientIndicationContainer) {
         mAmbientIndicationContainer = ambientIndicationContainer;
+    }
+
+    public void clearAmbientIndicationContainer(View ambientIndicationContainer) {
+        if (mAmbientIndicationContainer == ambientIndicationContainer) {
+            mAmbientIndicationContainer = null;
+        }
     }
 
 

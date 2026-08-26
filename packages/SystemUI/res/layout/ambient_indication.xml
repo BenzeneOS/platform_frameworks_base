@@ -15,5 +15,17 @@
   ~ limitations under the License.
   -->
 
-<!-- empty stub -->
-<merge />
+<!-- DozeServiceHost forwards always-on display taps to this container. -->
+<com.android.systemui.statusbar.phone.NowPlayingIndicationView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_gravity="bottom|center_horizontal"
+    android:layout_marginBottom="@dimen/ambient_indication_margin_bottom"
+    android:ellipsize="end"
+    android:gravity="center"
+    android:maxLines="1"
+    android:paddingStart="@dimen/keyguard_indication_text_padding"
+    android:paddingEnd="@dimen/keyguard_indication_text_padding"
+    android:textAppearance="@style/TextAppearance.Keyguard.BottomArea"
+    android:visibility="gone" />

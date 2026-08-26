@@ -974,6 +974,12 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
 
         mAmbientIndicationContainer = getNotificationShadeWindowView().findViewById(
                 R.id.ambient_indication_container);
+        if (mAmbientIndicationContainer instanceof NowPlayingIndicationView nowPlayingView) {
+            nowPlayingView.initialize(
+                    mActivityStarter,
+                    mKeyguardIndicationController::setAmbientIndicationVisible,
+                    mStatusBarStateController);
+        }
 
         ScrimView scrimBehind = getNotificationShadeWindowView().findViewById(R.id.scrim_behind);
         ScrimView notificationsScrim = getNotificationShadeWindowView()

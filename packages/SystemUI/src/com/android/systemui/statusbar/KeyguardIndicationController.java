@@ -421,6 +421,10 @@ public class KeyguardIndicationController {
         return mIndicationArea;
     }
 
+    public void setAmbientIndicationVisible(boolean visible) {
+        mKeyguardInteractor.setAmbientIndicationVisible(visible);
+    }
+
     /**
      * Notify controller about configuration changes.
      */

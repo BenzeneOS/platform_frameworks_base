@@ -14,23 +14,41 @@
 
 package com.android.systemui.keyguard.ui.composable.elements
 
+import android.annotation.SuppressLint
 import android.content.Context
+import android.view.LayoutInflater
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.viewinterop.AndroidView
 import com.android.compose.animation.scene.ElementContentScope
 import com.android.compose.animation.scene.ElementKey
 import com.android.systemui.dagger.SysUISingleton
+import com.android.systemui.plugins.ActivityStarter
 import com.android.systemui.plugins.keyguard.ui.composable.elements.BaseLockscreenElement.ElementSource
 import com.android.systemui.plugins.keyguard.ui.composable.elements.LockscreenElement
 import com.android.systemui.plugins.keyguard.ui.composable.elements.LockscreenElementKeys
 import com.android.systemui.plugins.keyguard.ui.composable.elements.LockscreenElementProvider
 import com.android.systemui.plugins.keyguard.ui.composable.elements.LockscreenScope
+import com.android.systemui.plugins.statusbar.StatusBarStateController
+import com.android.systemui.res.R
 import com.android.systemui.shade.ShadeDisplayAware
+import com.android.systemui.statusbar.KeyguardIndicationController
+import com.android.systemui.statusbar.phone.DozeServiceHost
+import com.android.systemui.statusbar.phone.NowPlayingIndicationView
+import dagger.Lazy
 import javax.inject.Inject
 
 @SysUISingleton
 class AmbientIndicationAreaProvider
 @Inject
-constructor(@ShadeDisplayAware private val context: Context) : LockscreenElementProvider {
+constructor(
+    @ShadeDisplayAware private val context: Context,
+    private val activityStarter: ActivityStarter,
+    private val indicationController: KeyguardIndicationController,
+    private val statusBarStateController: StatusBarStateController,
+    private val dozeServiceHost: Lazy<DozeServiceHost>,
+) : LockscreenElementProvider {
 
     override val elements: List<LockscreenElement> by lazy {
         listOf(AmbientIndicationAreaElement())
@@ -40,9 +58,28 @@ constructor(@ShadeDisplayAware private val context: Context) : LockscreenElement
 
         override val key: ElementKey = LockscreenElementKeys.AmbientIndicationArea
 
+        @SuppressLint("InflateParams")
         @Composable
         override fun LockscreenScope<ElementContentScope>.LockscreenElement() {
-            // This is the AOSP implementation, this is intentionally empty.
+            // Scene Container does not inflate ambient_indication.xml.
+            AndroidView(
+                factory = { viewContext ->
+                    (LayoutInflater.from(viewContext)
+                            .inflate(R.layout.ambient_indication, null, false)
+                            as NowPlayingIndicationView)
+                        .also { view ->
+                            view.id = R.id.ambient_indication_container
+                            view.initialize(
+                                activityStarter,
+                                indicationController::setAmbientIndicationVisible,
+                                statusBarStateController,
+                            )
+                            dozeServiceHost.get().setAmbientIndicationContainer(view)
+                        }
+                },
+                onRelease = { view -> dozeServiceHost.get().clearAmbientIndicationContainer(view) },
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
 
         override val context = this@AmbientIndicationAreaProvider.context

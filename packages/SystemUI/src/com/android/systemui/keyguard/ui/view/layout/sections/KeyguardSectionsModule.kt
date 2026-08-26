@@ -18,6 +18,7 @@
 package com.android.systemui.keyguard.ui.view.layout.sections
 
 import com.android.systemui.keyguard.shared.model.KeyguardSection
+import dagger.Binds
 import dagger.BindsOptionalOf
 import dagger.Module
 import javax.inject.Named
@@ -35,6 +36,12 @@ abstract class KeyguardSectionsModule {
     @BindsOptionalOf
     @Named(KEYGUARD_AMBIENT_INDICATION_AREA_SECTION)
     abstract fun defaultAmbientIndicationAreaSection(): KeyguardSection
+
+    @Binds
+    @Named(KEYGUARD_AMBIENT_INDICATION_AREA_SECTION)
+    abstract fun nowPlayingIndicationAreaSection(
+        section: NowPlayingIndicationSection
+    ): KeyguardSection
 
     @BindsOptionalOf
     @Named(KEYGUARD_BATTERY_CHARGING_SECTION)

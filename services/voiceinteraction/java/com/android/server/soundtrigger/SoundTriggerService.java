@@ -387,10 +387,21 @@ public class SoundTriggerService extends SystemService {
             if (!Objects.equals(op, AppOpsManager.OPSTR_RECORD_AUDIO)) {
                 return;
             }
-            final int mode = mAppOpsManager.checkOpNoThrow(
-                    AppOpsManager.OPSTR_RECORD_AUDIO, mOriginatorIdentity.uid,
-                    mOriginatorIdentity.packageName);
-            mOnOpModeChanged.accept(mode == AppOpsManager.MODE_ALLOWED);
+            final int mode =
+                    mAppOpsManager.checkOpRawNoThrow(
+                            AppOpsManager.OPSTR_RECORD_AUDIO,
+                            mOriginatorIdentity.uid,
+                            mOriginatorIdentity.packageName,
+                            null);
+            final boolean isAllowed =
+                    mode == AppOpsManager.MODE_ALLOWED
+                            || (mode == AppOpsManager.MODE_FOREGROUND
+                                    && PermissionUtil.checkPermissionForPreflight(
+                                                    mContext,
+                                                    mOriginatorIdentity,
+                                                    Manifest.permission.CAPTURE_AUDIO_HOTWORD)
+                                            == PermissionChecker.PERMISSION_GRANTED);
+            mOnOpModeChanged.accept(isAllowed);
         }
 
         void forceOpChangeRefresh() {
