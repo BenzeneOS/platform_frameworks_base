@@ -24,6 +24,7 @@ import static android.os.BatteryStatsInternal.CPU_WAKEUP_SUBSYSTEM_SOUND_TRIGGER
 import static android.os.BatteryStatsInternal.CPU_WAKEUP_SUBSYSTEM_UNKNOWN;
 import static android.os.BatteryStatsInternal.CPU_WAKEUP_SUBSYSTEM_WIFI;
 
+import android.annotation.Nullable;
 import android.annotation.SuppressLint;
 import android.app.ActivityManager;
 import android.content.Context;
@@ -76,6 +77,12 @@ public class CpuWakeupStats {
     @VisibleForTesting
     final Config mConfig = new Config();
     private final WakingActivityHistory mRecentWakingActivity;
+    @Nullable private WakeupAttributionCallback mWakeupAttributionCallback;
+
+    public interface WakeupAttributionCallback {
+        void onWakeupAttribution(long elapsedRealtime, long uptime, String reason,
+                SparseArray<SparseIntArray> attribution);
+    }
 
     @VisibleForTesting
     final LongSparseArray<Wakeup> mWakeupEvents = new LongSparseArray<>();
@@ -129,7 +136,7 @@ public class CpuWakeupStats {
         return FrameworkStatsLog.KERNEL_WAKEUP_ATTRIBUTED__REASON__UNKNOWN;
     }
 
-    private synchronized void logWakeupAttribution(Wakeup wakeupToLog) {
+    private synchronized void logWakeupAttribution(Wakeup wakeupToLog, String reason) {
         if (ArrayUtils.isEmpty(wakeupToLog.mIrqLines)) {
             FrameworkStatsLog.write(FrameworkStatsLog.KERNEL_WAKEUP_ATTRIBUTED,
                     FrameworkStatsLog.KERNEL_WAKEUP_ATTRIBUTED__TYPE__TYPE_UNKNOWN,
@@ -149,6 +156,12 @@ public class CpuWakeupStats {
             // remove the wakeup before the handler gets to process this message.
             Slog.wtf(TAG, "Unexpected null attribution found for " + wakeupToLog);
             return;
+        }
+
+        final WakeupAttributionCallback callback = mWakeupAttributionCallback;
+        if (callback != null) {
+            callback.onWakeupAttribution(wakeupToLog.mElapsedMillis, wakeupToLog.mUptimeMillis,
+                    reason, wakeupAttribution);
         }
 
         final StringBuilder traceEventBuilder = new StringBuilder();
@@ -230,7 +243,13 @@ public class CpuWakeupStats {
         for (int i = lastIdx; i >= 0; i--) {
             mWakeupAttribution.removeAt(i);
         }
-        mHandler.postDelayed(() -> logWakeupAttribution(parsedWakeup), WAKEUP_WRITE_DELAY_MS);
+        mHandler.postDelayed(() -> logWakeupAttribution(parsedWakeup, rawReason),
+                WAKEUP_WRITE_DELAY_MS);
+    }
+
+    public synchronized void setWakeupAttributionCallback(
+            @Nullable WakeupAttributionCallback callback) {
+        mWakeupAttributionCallback = callback;
     }
 
     /** Notes a waking activity that could have potentially woken up the CPU. */

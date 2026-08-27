@@ -18,16 +18,25 @@ package com.android.server.am;
 
 import static com.google.common.truth.Truth.assertThat;
 
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 import android.content.Context;
+import android.os.BatteryStatsInternal;
 import android.os.Handler;
 import android.os.HandlerThread;
+import android.os.PermissionEnforcer;
 import android.os.Process;
+import android.os.UserHandle;
+import android.util.SparseArray;
+import android.util.SparseIntArray;
 
 import androidx.test.InstrumentationRegistry;
 import androidx.test.runner.AndroidJUnit4;
 
+import com.android.internal.app.ICpuWakeupCallback;
+import com.android.internal.app.WakeAttributionEvent;
+import com.android.internal.app.WakeAttributionEventBatch;
 import com.android.server.power.stats.BatteryStatsImpl;
 
 import org.junit.After;
@@ -35,6 +44,7 @@ import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.Mockito;
 
 import java.io.File;
 import java.util.concurrent.CountDownLatch;
@@ -46,6 +56,7 @@ public final class BatteryStatsServiceTest {
 
     private BatteryStatsService mBatteryStatsService;
     private HandlerThread mBgThread;
+    private PermissionEnforcer mPermissionEnforcer;
 
     @Before
     public void setUp() {
@@ -54,7 +65,9 @@ public final class BatteryStatsServiceTest {
         mBgThread.start();
         File systemDir = context.getCacheDir();
         Handler handler = new Handler(mBgThread.getLooper());
-        mBatteryStatsService = new BatteryStatsService(context, systemDir);
+        mPermissionEnforcer = Mockito.mock(PermissionEnforcer.class);
+        mBatteryStatsService =
+                new BatteryStatsService(context, systemDir, mPermissionEnforcer);
         mBatteryStatsService.setRailsStatsCollectionEnabled(false);
         mBatteryStatsService.systemServicesReady();
     }
@@ -136,5 +149,127 @@ public final class BatteryStatsServiceTest {
         mBatteryStatsService.setLastBatteryUsageStatsBeforeResetAtomPullTimestamp(5478);
         assertThat(mBatteryStatsService.getLastBatteryUsageStatsBeforeResetAtomPullTimestamp())
                 .isEqualTo(5478);
+    }
+
+    @Test
+    public void wakeAttributionRequiresRequestedSession() {
+        mBatteryStatsService.noteWakeAttributionEvent(1L, 1L, "alarm",
+                attributionWithUids(Process.myUid()));
+
+        assertThat(mBatteryStatsService.getPendingWakeAttributionEventCount()).isEqualTo(0);
+        assertThrows(SecurityException.class,
+                () -> mBatteryStatsService.drainWakeAttributionEvents(1));
+    }
+
+    @Test
+    public void wakeAttributionDrainRequiresPermission() {
+        Mockito.doThrow(new SecurityException()).when(mPermissionEnforcer).enforcePermission(
+                Mockito.eq(android.Manifest.permission.OBSERVE_TRACING_SESSION),
+                Mockito.anyInt(), Mockito.anyInt());
+
+        assertThrows(SecurityException.class,
+                () -> mBatteryStatsService.drainWakeAttributionEvents(1));
+    }
+
+    @Test
+    public void wakeAttributionQueueDropsOldestAndReportsCount() {
+        registerWakeAttributionCollector();
+        for (int i = 0; i <= 4096; i++) {
+            mBatteryStatsService.noteWakeAttributionEvent(i, i, "alarm",
+                    attributionWithUids(Process.myUid()));
+        }
+
+        final WakeAttributionEventBatch batch =
+                mBatteryStatsService.drainWakeAttributionEvents(512);
+
+        assertThat(batch.events).hasSize(512);
+        assertThat(batch.events.get(0).elapsedRealtimeMillis).isEqualTo(1L);
+        assertThat(batch.droppedCount).isEqualTo(1L);
+    }
+
+    @Test
+    public void wakeAttributionStripsForeignUidsAndMarksIncomplete() {
+        registerWakeAttributionCollector();
+        final int appId = Math.max(Process.FIRST_APPLICATION_UID,
+                UserHandle.getAppId(Process.myUid()));
+        final int ownUid = UserHandle.getUid(UserHandle.myUserId(), appId);
+        final int foreignUid = UserHandle.getUid(UserHandle.myUserId() + 1, appId);
+        mBatteryStatsService.noteWakeAttributionEvent(1L, 1L, "alarm",
+                attributionWithUids(ownUid, foreignUid));
+
+        final WakeAttributionEvent event =
+                mBatteryStatsService.drainWakeAttributionEvents(1).events.get(0);
+
+        assertThat(event.candidateUids[0]).asList().containsExactly(ownUid);
+        assertThat(event.incomplete).isTrue();
+    }
+
+    @Test
+    public void wakeAttributionRecordIsFrozenWhenQueued() {
+        registerWakeAttributionCollector();
+        final SparseArray<SparseIntArray> attribution = attributionWithUids(Process.myUid());
+        mBatteryStatsService.noteWakeAttributionEvent(1L, 1L, "alarm", attribution);
+        attribution.valueAt(0).put(Process.myUid() + 1, 0);
+
+        final WakeAttributionEvent event =
+                mBatteryStatsService.drainWakeAttributionEvents(1).events.get(0);
+
+        assertThat(event.candidateUids[0]).asList().containsExactly(Process.myUid());
+    }
+
+    @Test
+    public void wakeAttributionCapsCandidatesSoADrainCannotOutgrowABinderTransaction() {
+        registerWakeAttributionCollector();
+        final SparseIntArray uidProcStates = new SparseIntArray();
+        for (int i = 0; i < 500; i++) {
+            uidProcStates.put(Process.FIRST_APPLICATION_UID + i, 0);
+        }
+        final SparseArray<SparseIntArray> attribution = new SparseArray<>();
+        attribution.put(0, uidProcStates);
+        mBatteryStatsService.noteWakeAttributionEvent(1L, 1L, "alarm", attribution);
+
+        final WakeAttributionEvent event =
+                mBatteryStatsService.drainWakeAttributionEvents(1).events.get(0);
+
+        assertThat(event.candidateUids[0].length).isAtMost(32);
+        assertThat(event.incomplete).isTrue();
+    }
+
+    @Test
+    public void wakeAttributionWithOnlyForeignUidsIsUnattributedAndIncomplete() {
+        registerWakeAttributionCollector();
+        final int appId = Math.max(Process.FIRST_APPLICATION_UID,
+                UserHandle.getAppId(Process.myUid()));
+        final int foreignUid = UserHandle.getUid(UserHandle.myUserId() + 1, appId);
+        mBatteryStatsService.noteWakeAttributionEvent(1L, 1L, "alarm",
+                attributionWithUids(foreignUid));
+
+        final WakeAttributionEvent event =
+                mBatteryStatsService.drainWakeAttributionEvents(1).events.get(0);
+
+        assertThat(event.candidateUids[0]).isEmpty();
+        assertThat(event.incomplete).isTrue();
+    }
+
+    private void registerWakeAttributionCollector() {
+        mBatteryStatsService.registerCpuWakeupCallback(new ICpuWakeupCallback.Stub() {
+            @Override
+            public void onCpuWakeup(long elapsedRealtimeMillis, long uptimeMillis, String reason) {
+            }
+
+            @Override
+            public void onCpuTimeBucketsPressure() {
+            }
+        }, false, false, false, true, false);
+    }
+
+    private static SparseArray<SparseIntArray> attributionWithUids(int... uids) {
+        final SparseIntArray uidProcStates = new SparseIntArray();
+        for (int uid : uids) {
+            uidProcStates.put(uid, 0);
+        }
+        final SparseArray<SparseIntArray> attribution = new SparseArray<>();
+        attribution.put(BatteryStatsInternal.CPU_WAKEUP_SUBSYSTEM_ALARM, uidProcStates);
+        return attribution;
     }
 }

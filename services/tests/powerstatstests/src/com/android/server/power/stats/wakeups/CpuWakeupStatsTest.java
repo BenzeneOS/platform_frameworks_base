@@ -41,6 +41,7 @@ import com.android.server.tests.assertutils.FlagAssert;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
 import java.util.ArrayList;
@@ -48,6 +49,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @RunWith(AndroidJUnit4.class)
 public class CpuWakeupStatsTest {
@@ -89,6 +91,22 @@ public class CpuWakeupStatsTest {
         obj.mUidProcStates.put(TEST_UID_4, TEST_PROC_STATE_4);
         obj.mUidProcStates.put(TEST_UID_5, TEST_PROC_STATE_5);
         obj.mUidProcStates.put(TEST_UID_6, TEST_PROC_STATE_6);
+    }
+
+    @Test
+    public void wakeAttributionCallbackRunsAtDelayedWritePoint() {
+        final CpuWakeupStats obj = new CpuWakeupStats(sContext, R.xml.irq_device_map_3, mHandler);
+        final AtomicBoolean delivered = new AtomicBoolean();
+        obj.setWakeupAttributionCallback((elapsedRealtime, uptime, reason, attribution) ->
+                delivered.set(true));
+
+        obj.noteWakeupTimeAndReason(1_000L, 500L, KERNEL_REASON_ALARM_IRQ);
+
+        assertThat(delivered.get()).isFalse();
+        final ArgumentCaptor<Runnable> runnable = ArgumentCaptor.forClass(Runnable.class);
+        Mockito.verify(mHandler).postDelayed(runnable.capture(), Mockito.eq(30_000L));
+        runnable.getValue().run();
+        assertThat(delivered.get()).isTrue();
     }
 
     @Test

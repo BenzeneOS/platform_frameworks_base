@@ -35,6 +35,7 @@ import android.telephony.SignalStrength;
 
 import com.android.internal.app.ICpuWakeupCallback;
 import com.android.internal.app.RadioRequestEventBatch;
+import com.android.internal.app.WakeAttributionEventBatch;
 
 interface IBatteryStats {
     /** @hide */
@@ -123,7 +124,7 @@ interface IBatteryStats {
     @EnforcePermission("OBSERVE_TRACING_SESSION")
     boolean registerCpuWakeupCallback(ICpuWakeupCallback callback, boolean recordDetailedHistory,
             boolean recordCpuTimeBuckets, boolean recordRadioRequests,
-            boolean receiveWakeupCallbacks);
+            boolean recordWakeAttribution, boolean receiveWakeupCallbacks);
 
     /** @hide */
     @EnforcePermission("OBSERVE_TRACING_SESSION")
@@ -139,6 +140,9 @@ interface IBatteryStats {
      */
     @EnforcePermission("OBSERVE_TRACING_SESSION")
     RadioRequestEventBatch drainRadioRequestEvents(int maxRecords);
+
+    @EnforcePermission("OBSERVE_TRACING_SESSION")
+    WakeAttributionEventBatch drainWakeAttributionEvents(int maxRecords);
 
     @EnforcePermission("UPDATE_DEVICE_STATS")
     void noteEvent(int code, String name, int uid);

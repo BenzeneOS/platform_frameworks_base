@@ -71,6 +71,7 @@ import android.os.IBinder;
 import android.os.INetworkManagementService;
 import android.os.Parcel;
 import android.os.ParcelFormatException;
+import android.os.PermissionEnforcer;
 import android.os.PowerManager.ServiceType;
 import android.os.PowerManagerInternal;
 import android.os.PowerSaveState;
@@ -105,6 +106,8 @@ import android.util.ArraySet;
 import android.util.AtomicFile;
 import android.util.IndentingPrintWriter;
 import android.util.Slog;
+import android.util.SparseArray;
+import android.util.SparseIntArray;
 import android.util.StatsEvent;
 import android.view.Display;
 
@@ -115,6 +118,8 @@ import com.android.internal.app.IBatteryStats;
 import com.android.internal.app.ICpuWakeupCallback;
 import com.android.internal.app.RadioRequestEvent;
 import com.android.internal.app.RadioRequestEventBatch;
+import com.android.internal.app.WakeAttributionEvent;
+import com.android.internal.app.WakeAttributionEventBatch;
 import com.android.internal.os.Clock;
 import com.android.internal.os.CpuScalingPolicies;
 import com.android.internal.os.CpuScalingPolicyReader;
@@ -237,21 +242,30 @@ public final class BatteryStatsService extends IBatteryStats.Stub
     private static final int MAX_RADIO_REQUEST_EVENTS = 4096;
     // A full ring in one reply parcel would flirt with the 1 MB binder buffer.
     private static final int MAX_RADIO_REQUEST_DRAIN_RECORDS = 512;
+    private static final int MAX_WAKE_ATTRIBUTION_EVENTS = 4096;
+    private static final int MAX_WAKE_ATTRIBUTION_DRAIN_RECORDS = 512;
+    private static final int MAX_WAKE_ATTRIBUTION_CANDIDATES = 32;
+    private static final int COLLECTOR_CPU_TIME = 1;
+    private static final int COLLECTOR_RADIO_REQUESTS = 2;
+    private static final int COLLECTOR_WAKE_ATTRIBUTION = 3;
 
     private static final class CpuWakeupCallbackConfig {
         final int callingUid;
         final boolean recordDetailedHistory;
         final boolean recordCpuTimeBuckets;
         final boolean recordRadioRequests;
+        final boolean recordWakeAttribution;
         final boolean receiveWakeupCallbacks;
 
         CpuWakeupCallbackConfig(int callingUid, boolean recordDetailedHistory,
                 boolean recordCpuTimeBuckets,
-                boolean recordRadioRequests, boolean receiveWakeupCallbacks) {
+                boolean recordRadioRequests, boolean recordWakeAttribution,
+                boolean receiveWakeupCallbacks) {
             this.callingUid = callingUid;
             this.recordDetailedHistory = recordDetailedHistory;
             this.recordCpuTimeBuckets = recordCpuTimeBuckets;
             this.recordRadioRequests = recordRadioRequests;
+            this.recordWakeAttribution = recordWakeAttribution;
             this.receiveWakeupCallbacks = receiveWakeupCallbacks;
         }
     }
@@ -269,6 +283,13 @@ public final class BatteryStatsService extends IBatteryStats.Stub
     private volatile boolean mRadioRequestsWanted;
     private volatile long mRadioRequestGeneration;
     private volatile Consumer<Runnable> mLocationRequestSnapshotCallback;
+
+    private final Object mWakeAttributionEventLock = new Object();
+    @GuardedBy("mWakeAttributionEventLock")
+    private final ArrayDeque<WakeAttributionEvent> mWakeAttributionEvents = new ArrayDeque<>();
+    @GuardedBy("mWakeAttributionEventLock")
+    private long mWakeAttributionEventsDropped;
+    private volatile boolean mWakeAttributionEventsEnabled;
 
     private final Object mCpuWakeupCallbackLock = new Object();
     @GuardedBy("mCpuWakeupCallbackLock")
@@ -428,6 +449,12 @@ public final class BatteryStatsService extends IBatteryStats.Stub
     };
 
     BatteryStatsService(Context context, File systemDir) {
+        this(context, systemDir, PermissionEnforcer.fromContext(context));
+    }
+
+    @VisibleForTesting
+    BatteryStatsService(Context context, File systemDir, PermissionEnforcer permissionEnforcer) {
+        super(permissionEnforcer);
         mContext = context;
         mUserManagerUserInfoProvider = new BatteryStatsImpl.UserInfoProvider() {
             private UserManagerInternal umi;
@@ -1530,12 +1557,13 @@ public final class BatteryStatsService extends IBatteryStats.Stub
     @EnforcePermission(OBSERVE_TRACING_SESSION)
     public boolean registerCpuWakeupCallback(ICpuWakeupCallback callback,
             boolean recordDetailedHistory, boolean recordCpuTimeBuckets,
-            boolean recordRadioRequests, boolean receiveWakeupCallbacks) {
+            boolean recordRadioRequests, boolean recordWakeAttribution,
+            boolean receiveWakeupCallbacks) {
         super.registerCpuWakeupCallback_enforcePermission();
         Objects.requireNonNull(callback, "callback");
         final CpuWakeupCallbackConfig config = new CpuWakeupCallbackConfig(Binder.getCallingUid(),
                 recordDetailedHistory, recordCpuTimeBuckets, recordRadioRequests,
-                receiveWakeupCallbacks);
+                recordWakeAttribution, receiveWakeupCallbacks);
         synchronized (mCpuWakeupCallbackLock) {
             if (!mCpuWakeupCallbacks.register(callback, config)) {
                 // register() may have unlinked a dying entry whose obituary will never fire.
@@ -1566,10 +1594,12 @@ public final class BatteryStatsService extends IBatteryStats.Stub
         boolean wantsDetailedHistory = false;
         boolean wantsCpuTimeBuckets = false;
         boolean wantsRadioRequests = false;
+        boolean wantsWakeAttribution = false;
         for (CpuWakeupCallbackConfig config : mCpuWakeupCallbackConfigs.values()) {
             wantsDetailedHistory |= config.recordDetailedHistory;
             wantsCpuTimeBuckets |= config.recordCpuTimeBuckets;
             wantsRadioRequests |= config.recordRadioRequests;
+            wantsWakeAttribution |= config.recordWakeAttribution;
         }
 
         // Compared against what was asked for, since enabling completes asynchronously.
@@ -1599,6 +1629,18 @@ public final class BatteryStatsService extends IBatteryStats.Stub
                         }
                     }));
                 }
+            }
+        }
+
+        if (mWakeAttributionEventsEnabled != wantsWakeAttribution) {
+            if (!wantsWakeAttribution) {
+                mCpuWakeupStats.setWakeupAttributionCallback(null);
+                mWakeAttributionEventsEnabled = false;
+                clearWakeAttributionEvents();
+            } else {
+                clearWakeAttributionEvents();
+                mWakeAttributionEventsEnabled = true;
+                mCpuWakeupStats.setWakeupAttributionCallback(this::noteWakeAttributionEvent);
             }
         }
 
@@ -1645,7 +1687,7 @@ public final class BatteryStatsService extends IBatteryStats.Stub
                 if (!mCpuTimeBucketsForCpuWakeupCallbacks) return new long[0];
                 // Checked here and not on entry, since a session that ended while this call
                 // queued must not be drained on an authorization it no longer holds.
-                enforceRegisteredCollector("cpu time buckets", false);
+                enforceRegisteredCollector("cpu time buckets", COLLECTOR_CPU_TIME);
                 history = mObservatoryUidOwnerships;
                 generation = mObservatorySessionGeneration;
             }
@@ -1706,7 +1748,7 @@ public final class BatteryStatsService extends IBatteryStats.Stub
     @EnforcePermission(OBSERVE_TRACING_SESSION)
     public RadioRequestEventBatch drainRadioRequestEvents(int maxRecords) {
         super.drainRadioRequestEvents_enforcePermission();
-        enforceRegisteredCollector("radio request events", true);
+        enforceRegisteredCollector("radio request events", COLLECTOR_RADIO_REQUESTS);
         if (maxRecords <= 0 || maxRecords > MAX_RADIO_REQUEST_DRAIN_RECORDS) {
             throw new IllegalArgumentException("maxRecords must be between 1 and "
                     + MAX_RADIO_REQUEST_DRAIN_RECORDS);
@@ -1725,6 +1767,96 @@ public final class BatteryStatsService extends IBatteryStats.Stub
             mRadioRequestEventsDropped = 0;
         }
         return new RadioRequestEventBatch(events, dropped);
+    }
+
+    @Override
+    @EnforcePermission(OBSERVE_TRACING_SESSION)
+    public WakeAttributionEventBatch drainWakeAttributionEvents(int maxRecords) {
+        super.drainWakeAttributionEvents_enforcePermission();
+        enforceRegisteredCollector("wake attribution events", COLLECTOR_WAKE_ATTRIBUTION);
+        if (maxRecords <= 0 || maxRecords > MAX_WAKE_ATTRIBUTION_DRAIN_RECORDS) {
+            throw new IllegalArgumentException("maxRecords must be between 1 and "
+                    + MAX_WAKE_ATTRIBUTION_DRAIN_RECORDS);
+        }
+        final ArrayList<WakeAttributionEvent> events = new ArrayList<>();
+        if (!mWakeAttributionEventsEnabled) {
+            return new WakeAttributionEventBatch(events, 0L);
+        }
+        final long dropped;
+        synchronized (mWakeAttributionEventLock) {
+            while (events.size() < maxRecords && !mWakeAttributionEvents.isEmpty()) {
+                events.add(mWakeAttributionEvents.pollFirst());
+            }
+            dropped = mWakeAttributionEventsDropped;
+            mWakeAttributionEventsDropped = 0;
+        }
+        final int callingUserId = UserHandle.getUserId(Binder.getCallingUid());
+        events.replaceAll(event -> filterWakeAttributionForUser(event, callingUserId));
+        return new WakeAttributionEventBatch(events, dropped);
+    }
+
+    @VisibleForTesting
+    void noteWakeAttributionEvent(long elapsedRealtime, long uptime, String reason,
+            SparseArray<SparseIntArray> attribution) {
+        if (!mWakeAttributionEventsEnabled) return;
+        final int[] subsystems = new int[attribution.size()];
+        final int[][] candidateUids = new int[attribution.size()][];
+        // The record count alone cannot bound a drain, since the candidate arrays are variable
+        // and a large enough batch would exceed the binder transaction limit. A wakeup blaming
+        // this many uids has not attributed anything anyway, so the surplus is dropped.
+        int remaining = MAX_WAKE_ATTRIBUTION_CANDIDATES;
+        boolean truncated = false;
+        for (int i = 0; i < attribution.size(); i++) {
+            subsystems[i] = attribution.keyAt(i);
+            final SparseIntArray uidProcStates = attribution.valueAt(i);
+            final int available = uidProcStates != null ? uidProcStates.size() : 0;
+            final int uidCount = Math.min(available, remaining);
+            truncated |= uidCount < available;
+            remaining -= uidCount;
+            candidateUids[i] = new int[uidCount];
+            for (int j = 0; j < uidCount; j++) {
+                candidateUids[i][j] = uidProcStates.keyAt(j);
+            }
+        }
+        final WakeAttributionEvent event = new WakeAttributionEvent(elapsedRealtime, uptime,
+                reason, subsystems, candidateUids, truncated);
+        synchronized (mWakeAttributionEventLock) {
+            if (!mWakeAttributionEventsEnabled) return;
+            if (mWakeAttributionEvents.size() >= MAX_WAKE_ATTRIBUTION_EVENTS) {
+                mWakeAttributionEvents.pollFirst();
+                mWakeAttributionEventsDropped++;
+            }
+            mWakeAttributionEvents.addLast(event);
+        }
+    }
+
+    @VisibleForTesting
+    int getPendingWakeAttributionEventCount() {
+        synchronized (mWakeAttributionEventLock) {
+            return mWakeAttributionEvents.size();
+        }
+    }
+
+    private static WakeAttributionEvent filterWakeAttributionForUser(WakeAttributionEvent event,
+            int userId) {
+        final int[][] candidateUids = new int[event.candidateUids.length][];
+        boolean incomplete = event.incomplete;
+        for (int i = 0; i < event.candidateUids.length; i++) {
+            final int[] source = event.candidateUids[i];
+            final int[] filtered = new int[source.length];
+            int count = 0;
+            for (int uid : source) {
+                if (uid >= Process.FIRST_APPLICATION_UID && UserHandle.getUserId(uid) != userId) {
+                    incomplete = true;
+                    continue;
+                }
+                filtered[count++] = uid;
+            }
+            candidateUids[i] =
+                    count == filtered.length ? filtered : Arrays.copyOf(filtered, count);
+        }
+        return new WakeAttributionEvent(event.elapsedRealtimeMillis, event.uptimeMillis,
+                event.reason, event.subsystems.clone(), candidateUids, incomplete);
     }
 
     private void noteRadioRequestEvent(int type, int uid, @Nullable String packageName,
@@ -1782,13 +1914,18 @@ public final class BatteryStatsService extends IBatteryStats.Stub
      * Records are consumed destructively from a single queue, so a caller that never registered
      * must not be able to take another client's data or reset its counters.
      */
-    private void enforceRegisteredCollector(String what, boolean radioRequests) {
+    private void enforceRegisteredCollector(String what, int collector) {
         final int callingUid = Binder.getCallingUid();
         synchronized (mCpuWakeupCallbackLock) {
             for (CpuWakeupCallbackConfig config : mCpuWakeupCallbackConfigs.values()) {
                 if (config.callingUid != callingUid) continue;
-                // Registering alone is not a claim on data the session never asked for.
-                if (radioRequests ? config.recordRadioRequests : config.recordCpuTimeBuckets) {
+                final boolean requested = switch (collector) {
+                    case COLLECTOR_CPU_TIME -> config.recordCpuTimeBuckets;
+                    case COLLECTOR_RADIO_REQUESTS -> config.recordRadioRequests;
+                    case COLLECTOR_WAKE_ATTRIBUTION -> config.recordWakeAttribution;
+                    default -> false;
+                };
+                if (requested) {
                     return;
                 }
             }
@@ -1802,6 +1939,13 @@ public final class BatteryStatsService extends IBatteryStats.Stub
             mRadioRequestEvents.clear();
             mRadioRequestOpenRegistrations.clear();
             mRadioRequestEventsDropped = 0;
+        }
+    }
+
+    private void clearWakeAttributionEvents() {
+        synchronized (mWakeAttributionEventLock) {
+            mWakeAttributionEvents.clear();
+            mWakeAttributionEventsDropped = 0;
         }
     }
 
