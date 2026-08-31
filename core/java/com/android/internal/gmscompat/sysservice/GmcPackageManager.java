@@ -38,15 +38,19 @@ import android.content.pm.PackageInstaller;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.content.pm.SharedLibraryInfo;
+import android.content.pm.Signature;
+import android.content.pm.SigningInfo;
 import android.content.pm.VersionedPackage;
 import android.ext.PackageId;
 import android.os.Parcel;
 import android.os.Parcelable;
 import android.os.Process;
 import android.os.RemoteException;
+import android.os.SystemProperties;
 import android.os.UserHandle;
 import android.util.ArrayMap;
 import android.util.ArraySet;
+import android.util.Base64;
 import android.util.Log;
 import android.util.PackageUtils;
 
@@ -62,6 +66,29 @@ import java.util.stream.Collectors;
 @SuppressLint("WrongConstant") // lint doesn't like "flags & ~" expressions
 public class GmcPackageManager extends ApplicationPackageManager {
     private static final String TAG = GmcPackageManager.class.getSimpleName();
+    private static final String GOOGLE_PLATFORM_CERTIFICATE =
+            "MIIFyTCCA7GgAwIBAgIVALyxxl+zDS9SL68SzOr48309eAZyMA0GCSqGSIb3DQEBCwUAMHQxCzAJBgNVBAYTAlVTMRMwEQYDVQQI" +
+            "EwpDYWxpZm9ybmlhMRYwFAYDVQQHEw1Nb3VudGFpbiBWaWV3MRQwEgYDVQQKEwtHb29nbGUgSW5jLjEQMA4GA1UECxMHQW5kcm9p" +
+            "ZDEQMA4GA1UEAxMHQW5kcm9pZDAgFw0yMjExMDExODExMzVaGA8yMDUyMTEwMTE4MTEzNVowdDELMAkGA1UEBhMCVVMxEzARBgNV" +
+            "BAgTCkNhbGlmb3JuaWExFjAUBgNVBAcTDU1vdW50YWluIFZpZXcxFDASBgNVBAoTC0dvb2dsZSBJbmMuMRAwDgYDVQQLEwdBbmRy" +
+            "b2lkMRAwDgYDVQQDEwdBbmRyb2lkMIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAsqtalIy/nctKlrhd1UVoDffFGnDf" +
+            "9GLi0QQhsVoJkfF16vDDydZJOycG7/kQziRZhFdcoMrIYZzzw0ppBjsSe1AiWMuKXwTBaEtxN99S1xsJiW4/QMI6N6kMunydWRMs" +
+            "bJ6aAxi1lVq0bxSwr8Sg/8u9HGVivfdG8OpUM+qjuV5gey5xttNLK3BZDrAlco8RkJZryAD40flmJZrWXJmcr2HhJJUnqG4Z3MSz" +
+            "iEgW1u1JnnY3f/BFdgYsA54SgdUGdQP3aqzSjIpGK01/vjrXvifHazSANjvl0AUE5i6AarMw2biEKB2ySUDp8idC5w12GpqDrhZ/" +
+            "QkW8yBSa87KbkMYXuRA2Gq1fYbQx3YJraw0UgZ4M3fFKpt6raxxM5j0sWHlULD7dAZMERvNESVrKG3tQ7B39WAD8QLGYc45DFEGO" +
+            "hKv5Fv8510h5sXK502IvGpI4FDwz2rbtAgJ0j+16db5wCSW5ThvNPhCheyciajc8dU1B5tJzZN/ksBpzne4Xf9gOLZ9ZU0+3Z5gH" +
+            "VvTS/YpxBFwiFpmL7dvGxew0cXGSsG5UTBlgr7i0SX0WhY4Djjo8IfPwrvvA0QaCFamdYXKqBsSHgEyXS9zgGIFPt2jWdhaS+sAa" +
+            "//5SXcWro0OdiKPuwEzLgj759ke1sHRnvO735dYn5whVbzlGyLBh3L0CAwEAAaNQME4wDAYDVR0TBAUwAwEB/zAdBgNVHQ4EFgQU" +
+            "U1eXQ7NoYKjvOQlh5V8jHQMoxA8wHwYDVR0jBBgwFoAUU1eXQ7NoYKjvOQlh5V8jHQMoxA8wDQYJKoZIhvcNAQELBQADggIBAHFI" +
+            "azRLs3itnZKllPnboSd6sHbzeJURKehx8GJPvIC+xWlwWyFO5+GHmgc3yh/SVd3Xja/k8Ud59WEYTjyJJWTw0Jygx37rHW7VGn2H" +
+            "Duy/x0D+els+S8HeLD1toPFMepjIXJn7nHLhtmzTPlDWDrhiaYsls/k5Izf89xYnI4euuOY2+1gsweJqFGfbznqyqy8xLyzoZ6bv" +
+            "BJtgeY+G3i/9Be14HseSNa4FvI1Oze/l2gUu1IXzN6DGWR/lxEyt+TncJfBGKbjafYrfSh3zsE4N3TU7BeOL5INirOMjre/jVgB1" +
+            "YQG5qLVaPoz6mdn75AbBBm5a5ahApLiKqzy/hP+1rWgw8Ikb7vbUqov/bnY3IlIU6XcPJTCDb9aRZQkStvYpQd82XTyxD/T0GgRL" +
+            "nUj5Uv6iZlikFx1KNj0YNS2T3gyvL++J9B0Y6gAkiG0EtNplz7Pomsv5pVdmHVdKMjqWw5/6zYzVmu5cXFtR384Ti1qwML1xkD6T" +
+            "C3VIv88rKIEjrkY2c+v1frh9fRJ2OmzXmML9NgHTjEiJR2Ib2iNrMKxkuTIs9oxKZgrJtJKvdU9qJJKM5PnZuNuHhGs6A/9gt9Oc" +
+            "cetYeQvVSqeEmQluWfcunQn9C9Vwi2BJIiVJh4IdWZf5/e2PlSSQ9CJjz2bKI17pzdxOmjQfE0JSF7Xt";
+    private static final Signature GOOGLE_PLATFORM_SIGNATURE = new Signature(
+            Base64.decode(GOOGLE_PLATFORM_CERTIFICATE, Base64.DEFAULT));
 
     public GmcPackageManager(Context context, IPackageManager pm) {
         super(context, pm);
@@ -100,10 +127,35 @@ public class GmcPackageManager extends ApplicationPackageManager {
     }
 
     public static void maybeAdjustPackageInfo(PackageInfo pi) {
+        if (shouldSpoofPlatformSignature(pi)) {
+            if (pi.signatures != null && pi.signatures.length != 0) {
+                pi.signatures[0] = new Signature(GOOGLE_PLATFORM_SIGNATURE);
+            }
+            if (pi.signingInfo != null) {
+                Signature[] signatures = pi.signingInfo.getApkContentsSigners();
+                if (signatures != null && signatures.length != 0) {
+                    signatures[0] = new Signature(GOOGLE_PLATFORM_SIGNATURE);
+                }
+            }
+        }
+
         ApplicationInfo ai = pi.applicationInfo;
         if (ai != null) {
             maybeAdjustApplicationInfo(ai);
         }
+    }
+
+    private static boolean shouldSpoofPlatformSignature(PackageInfo pi) {
+        return GmsCompat.isGmsCore()
+                && "android".equals(pi.packageName)
+                && SystemProperties.getBoolean("ro.mystic.google_platform_signature", false);
+    }
+
+    private static boolean shouldSpoofInstallSource(String packageName) {
+        return GmsCompat.isGmsCore()
+                && SystemProperties.getBoolean("ro.mystic.google_install_source", false)
+                && (PackageId.GMS_CORE_NAME.equals(packageName)
+                        || PackageId.PLAY_STORE_NAME.equals(packageName));
     }
 
     public static void maybeAdjustApplicationInfo(ApplicationInfo ai) {
@@ -377,6 +429,10 @@ public class GmcPackageManager extends ApplicationPackageManager {
 
     @Override
     public String getInstallerPackageName(String packageName) {
+        if (shouldSpoofInstallSource(packageName)) {
+            return PackageId.PLAY_STORE_NAME;
+        }
+
         try {
             return super.getInstallerPackageName(packageName);
         } catch (Exception e) {
@@ -400,6 +456,21 @@ public class GmcPackageManager extends ApplicationPackageManager {
                 return isi;
             }
             throw e;
+        }
+
+        if (shouldSpoofInstallSource(packageName)) {
+            PackageInfo installerInfo = getPackageInfoAsUser(
+                    PackageId.PLAY_STORE_NAME,
+                    PackageInfoFlags.of(GET_SIGNING_CERTIFICATES),
+                    getUserId());
+            SigningInfo signingInfo = installerInfo.signingInfo;
+            return new InstallSourceInfo(
+                    PackageId.PLAY_STORE_NAME,
+                    signingInfo,
+                    null,
+                    PackageId.PLAY_STORE_NAME,
+                    PackageId.PLAY_STORE_NAME,
+                    PackageInstaller.PACKAGE_SOURCE_STORE);
         }
 
         switch (packageName) {

@@ -29,6 +29,7 @@ import android.os.Parcel;
 import android.os.Parcelable;
 import android.util.Log;
 
+import com.android.internal.gmscompat.sysservice.GmcPackageManager;
 import com.android.internal.util.CollectionUtils;
 
 import java.util.Collections;
@@ -775,7 +776,9 @@ public class PackageInfo implements Parcelable {
             = new Parcelable.Creator<PackageInfo>() {
         @Override
         public PackageInfo createFromParcel(Parcel source) {
-            return new PackageInfo(source);
+            PackageInfo packageInfo = new PackageInfo(source);
+            GmcPackageManager.maybeAdjustPackageInfo(packageInfo);
+            return packageInfo;
         }
 
         @Override
