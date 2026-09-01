@@ -21,6 +21,7 @@ import static android.security.keystore2.AndroidKeyStoreCipherSpiBase.DEFAULT_MG
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.annotation.RequiresPermission;
+import android.app.compat.gms.GmsCompat;
 import android.content.Context;
 import android.hardware.security.keymint.EcCurve;
 import android.hardware.security.keymint.KeyParameter;
@@ -860,7 +861,10 @@ public abstract class AndroidKeyStoreKeyPairGeneratorSpi extends KeyPairGenerato
                     KeymasterDefs.KM_TAG_ATTESTATION_CHALLENGE, challenge
             ));
 
-            if (mSpec.isDevicePropertiesAttestationIncluded()) {
+            int[] idTypes = mSpec.getAttestationIds();
+            boolean isSandboxedGmsCore = GmsCompat.isEnabled() && GmsCompat.isGmsCore();
+            if (mSpec.isDevicePropertiesAttestationIncluded()
+                    || (isSandboxedGmsCore && idTypes.length != 0)) {
                 final String platformReportedBrand =
                         isPropertyEmptyOrUnknown(Build.BRAND_FOR_ATTESTATION)
                         ? Build.BRAND : Build.BRAND_FOR_ATTESTATION;
@@ -898,8 +902,7 @@ public abstract class AndroidKeyStoreKeyPairGeneratorSpi extends KeyPairGenerato
                 ));
             }
 
-            int[] idTypes = mSpec.getAttestationIds();
-            if (idTypes.length == 0) {
+            if (idTypes.length == 0 || isSandboxedGmsCore) {
                 return;
             }
             final Set<Integer> idTypesSet = new ArraySet<>(idTypes.length);
